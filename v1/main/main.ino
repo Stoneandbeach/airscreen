@@ -25,13 +25,12 @@ enum canvas_error_t {
 // Display (i.e., overall) declarations
 displayState_t displayState = S_INIT;
 displayCommand_t displayCommand = NO_COMMAND;
-int onboardLedPin = 13;
-float display_radius = 75; // Radius of the swept volume in mm
-float display_angleLimit = M_PI / 4; // Outer angle limit of the display volume, from axis parallel to laser beams
-const int display_nrCols = 12;
-const int display_colMax = display_nrCols - 1; // Index of the last column
-float display_distanceFromAxis = 40; // Distance from canvas axis to display surface in mm
-uint8_t frame[display_colMax]; // THIS NEEDS TO BE EXPANDED WHEN I HAVE MORE LASERS
+const int ONBOARD_LED_PIN = 13;
+const float DISPLAY_RADIUS = 75; // Radius of the swept volume in mm
+const float DISPLAY_ANGLE_LIMIT = M_PI / 4; // Outer angle limit of the display volume, from axis parallel to laser beams
+const int DISPLAY_NR_COLS = 12;
+const float DISPLAY_DIST_FROM_AXIS = 40; // Distance from canvas axis to display surface in mm
+uint8_t frame[DISPLAY_NR_COLS]; // THIS NEEDS TO BE EXPANDED WHEN I HAVE MORE LASERS
 int frameNr = 0;
 int loadedFrameNr = 0;
 long frameStartTime;
@@ -98,7 +97,7 @@ void display_loadFrame(uint8_t *frameArray, int nr) {
     dummy[1] = temp;
   } */
   //Serial.print("Frame: ");
-  for (int i = 0; i < display_nrCols; i++) {
+  for (int i = 0; i < DISPLAY_NR_COLS; i++) {
     if (i < 11) {
       frameArray[i] = columns[i];
     } else {
@@ -141,8 +140,8 @@ int canvas_getCurrentCol(long frameTime, float rps) {
   // Calculate which column to display depending on rps and current frame time
   float t = ((float) frameTime) / 1000000; // Uptime of the current frame in seconds
   float w = rps * 2 * M_PI; // Angular frequency of the canvas
-  float y = display_distanceFromAxis;
-  float x = y / tan(w * t + display_angleLimit); // x position along the display surface. Angle is calculated in relation to the laser beam
+  float y = DISPLAY_DIST_FROM_AXIS;
+  float x = y / tan(w * t + DISPLAY_ANGLE_LIMIT); // x position along the display surface. Angle is calculated in relation to the laser beam
   /*Serial.print(x);
   Serial.print(" ");
   Serial.println(y);
@@ -151,14 +150,14 @@ int canvas_getCurrentCol(long frameTime, float rps) {
   Serial.print(" ");
   Serial.print(t);
   Serial.print(" ");
-  Serial.print(w * t + display_angleLimit);
+  Serial.print(w * t + DISPLAY_ANGLE_LIMIT);
   Serial.print(" ");
-  Serial.println(tan(w * t + display_angleLimit));*/
-  float D = 2 * display_radius * cos(display_angleLimit); // The width of the display surface
-  int n = display_nrCols + 1; //+ Number of display columns, plus one last, dark, padded columns
+  Serial.println(tan(w * t + DISPLAY_ANGLE_LIMIT));*/
+  float D = 2 * DISPLAY_RADIUS * cos(DISPLAY_ANGLE_LIMIT); // The width of the display surface
+  int n = DISPLAY_NR_COLS + 1; //+ Number of display columns, plus one last, dark, padded columns
   float colWidth = D / n;
   x = -x + y;
-  for (int i = 0; i < display_nrCols; i++) {
+  for (int i = 0; i < DISPLAY_NR_COLS; i++) {
     if ((x > i * colWidth) && (x < (i + 1) * colWidth)) { // Find the segment of D in which x lies
       return i;
     }
@@ -248,7 +247,7 @@ void setup() {
   Serial.begin(115200);
   
   // Display
-  pinMode(onboardLedPin, OUTPUT);
+  pinMode(ONBOARD_LED_PIN, OUTPUT);
   
   // Canvas
   pinMode(canvas_signalPin, INPUT);
