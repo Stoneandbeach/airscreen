@@ -22,6 +22,16 @@ enum canvas_error_t {
   CANVAS_NO_SIGNAL      // This error is set if the canvas motor has been asked to spin up but no canvas_signalState change is detected
 };
 
+enum com_inc_msg_t {
+  COM_FRAME_AVAILABLE = 1
+};
+
+enum com_outg_msg_t {
+  COM_READY = 1,
+  COM_REQUEST_FRAME = 2,
+  COM_FRAME_RECEIVED = 3
+};
+
 // Display (i.e., overall) declarations
 displayState_t displayState = S_INIT;
 displayCommand_t displayCommand = NO_COMMAND;
@@ -50,7 +60,7 @@ const int canvas_averageRpsOverCounts = 10;
 volatile long canvas_highTimes[canvas_averageRpsOverCounts];
 volatile long canvas_lowTimes[canvas_averageRpsOverCounts];
 
-const int canvas_signalPin = 2;
+const int CANVAS_SIGNAL_PIN = 2;
 
 float steadyRpsChangeLimit = 0.05; // Percentage change limit to consider rps steady
 int steadyRpsCountTarget = 10;
@@ -62,9 +72,9 @@ canvas_error_t canvas_error = CANVAS_NO_ERROR;
 bool fatalError = 0;
 
 // Laser variables
-const int numLasers = 5;
-int laser_pins[numLasers] = {3, 4, 5, 6, 8};
-int laser_states[numLasers];
+const int NR_LASERS = 5;
+const int LASER_PINS[NR_LASERS] = {3, 4, 5, 6, 8};
+int laser_states[NR_LASERS];
 
 // Display functions
 void setCommand(displayCommand_t command) {
@@ -80,30 +90,44 @@ void changeState(displayState_t state) {
 }
 
 void display_loadFrame(uint8_t *frameArray, int nr) {
-  uint8_t columns[11] = {0b00011111,
-                         0b00000100,
-                         0b00011111,
-                         0b00000000,
-                         0b00011111,
-                         0b00010101,
-                         0b00010101,
-                         0b00000000,
-                         0b00001001,
-                         0b00010001,
-                         0b00001111};
-  /*if ((nr / 10) & 0b1) {
-    uint8_t temp = dummy[0];
-    dummy[0] = dummy[1];
-    dummy[1] = temp;
-  } */
-  //Serial.print("Frame: ");
+  uint8_t columns[11];
+  if ((nr / 10) % 2 == 0) {
+    uint8_t temp[11] = {0b00011111,
+                           0b00000100,
+                           0b00011111,
+                           0b00000000,
+                           0b00011111,
+                           0b00010101,
+                           0b00010101,
+                           0b00000000,
+                           0b00001001,
+                           0b00010001,
+                           0b00001111};
+    for (int i = 0; i < 11; i++) {
+      columns[i] = temp[i];
+    }
+  } else {
+    uint8_t temp[11] = {0b00010101,
+                           0b00001010,
+                           0b00010101,
+                           0b00001010,
+                           0b00000000,
+                           0b00000000,
+                           0b00000000,
+                           0b00000000,
+                           0b00010101,
+                           0b00001010,
+                           0b00010101};
+    for (int i = 0; i < 11; i++) {
+      columns[i] = temp[i];
+    }
+  }
   for (int i = 0; i < DISPLAY_NR_COLS; i++) {
     if (i < 11) {
       frameArray[i] = columns[i];
     } else {
       frameArray[i] = 0b00000000;
     }
-    //Serial.println(frameArray[i]);
   }
 }
 
@@ -140,25 +164,14 @@ int canvas_getCurrentCol(long frameTime, float rps) {
   // Calculate which column to display depending on rps and current frame time
   float t = ((float) frameTime) / 1000000; // Uptime of the current frame in seconds
   float w = rps * 2 * M_PI; // Angular frequency of the canvas
-  float y = DISPLAY_DIST_FROM_AXIS;
+  float y = DISPLAY_RADIUS * sin(DISPLAY_ANGLE_LIMIT); // y position of the display surface
   float x = y / tan(w * t + DISPLAY_ANGLE_LIMIT); // x position along the display surface. Angle is calculated in relation to the laser beam
-  /*Serial.print(x);
-  Serial.print(" ");
-  Serial.println(y);
-  Serial.print(" ");
-  Serial.print(w);
-  Serial.print(" ");
-  Serial.print(t);
-  Serial.print(" ");
-  Serial.print(w * t + DISPLAY_ANGLE_LIMIT);
-  Serial.print(" ");
-  Serial.println(tan(w * t + DISPLAY_ANGLE_LIMIT));*/
   float D = 2 * DISPLAY_RADIUS * cos(DISPLAY_ANGLE_LIMIT); // The width of the display surface
   int n = DISPLAY_NR_COLS + 1; //+ Number of display columns, plus one last, dark, padded columns
   float colWidth = D / n;
-  x = -x + y;
+  x = -x + D / 2; // Rescaling of x to 0 < x < D
   for (int i = 0; i < DISPLAY_NR_COLS; i++) {
-    if ((x > i * colWidth) && (x < (i + 1) * colWidth)) { // Find the segment of D in which x lies
+    if ((x >= i * colWidth) && (x < (i + 1) * colWidth)) { // Find the segment of D in which x lies
       return i;
     }
   }
@@ -168,7 +181,7 @@ int canvas_getCurrentCol(long frameTime, float rps) {
 // Laser functions
 void laser_setState(int laserIdx, int state) {
   laser_states[laserIdx] = state;
-  digitalWrite(laser_pins[laserIdx], state);
+  digitalWrite(LASER_PINS[laserIdx], state);
 }
 
 int laser_getState(int laserIdx) { // This may never be needed.
@@ -177,21 +190,16 @@ int laser_getState(int laserIdx) { // This may never be needed.
 
 void laser_showCol(int currentCol) {
   if (currentCol == -1) {
-    for (int i = 0; i < numLasers; i++) {
+    for (int i = 0; i < NR_LASERS; i++) {
       laser_setState(i, LOW);
     }
   } else {
     uint8_t column = frame[currentCol];
     uint8_t bitMask = 0b00000001; // THIS IS GOING TO BREAK IF THERE ARE MORE THAN 8 LASERS OR SOMETHING
-    Serial.println();
-    Serial.println(column);
-    for (int i = 0; i < numLasers; i++) {
+    for (int i = 0; i < NR_LASERS; i++) {
       uint8_t state = (column & (bitMask << i)) >> i;
-      Serial.print(state);
-      Serial.print(" ");
       laser_setState(i, state);
     }
-    Serial.println();
   }
 }
 
@@ -209,6 +217,14 @@ void debugPrint() {
   Serial.println();
 }
 
+void debugPrintTiming() {
+  Serial.print(currentCol);
+  Serial.print(",");
+  Serial.print(canvas_signalState);
+  Serial.print(",");
+  Serial.println(displayState);
+}
+
 long debugTimeNow = 0;
 long debugTimeThen = 0;
 
@@ -217,22 +233,13 @@ void debugLasers() {
   Serial.println(debugTimeNow);
   int col = canvas_getCurrentCol(debugTimeNow, canvas_rps);
   int debugLaserState = col % 2;
-  /*float spr = 1000000 / canvas_rps;
-  if (debugTimeNow - debugTimeThen > spr / 64) {
-    debugLaserState = 1 - debugLaserState;
-    debugTimeThen = debugTimeNow;
-  }*/
   laser_setState(0, debugLaserState);
-  /*Serial.print(" ");
-  Serial.print(col);
-  Serial.print(" ");
-  Serial.println(digitalRead(canvas_signalPin));*/
 }
 
 // Interrupts
 void canvas_signalInterrupt() {
   canvas_signalCount++;
-  canvas_signalState = digitalRead(canvas_signalPin);
+  canvas_signalState = digitalRead(CANVAS_SIGNAL_PIN);
   if (canvas_signalState) {
     canvas_signalHighCount++;
     canvas_highTimes[canvas_signalHighCount % canvas_averageRpsOverCounts] = micros();
@@ -250,13 +257,13 @@ void setup() {
   pinMode(ONBOARD_LED_PIN, OUTPUT);
   
   // Canvas
-  pinMode(canvas_signalPin, INPUT);
-  attachInterrupt(digitalPinToInterrupt(canvas_signalPin), canvas_signalInterrupt, CHANGE);
+  pinMode(CANVAS_SIGNAL_PIN, INPUT);
+  attachInterrupt(digitalPinToInterrupt(CANVAS_SIGNAL_PIN), canvas_signalInterrupt, CHANGE);
   // Here I will later initialize pins for controlling fan speed, if required.
 
   // Laser
-  for (int i = 0; i < numLasers; i++) {
-    pinMode(laser_pins[i], OUTPUT);
+  for (int i = 0; i < NR_LASERS; i++) {
+    pinMode(LASER_PINS[i], OUTPUT);
     laser_states[i] = LOW;
   }
 }
@@ -264,11 +271,12 @@ void setup() {
 void loop() {
 
   //debugLasers();
+
+  int currentCol = -2;
   
   switch (displayState) {
     case S_INIT:
       // Possibility of doing startup checks, like measuring feedback from diodes if available
-      Serial.println("INIT");
       changeState(S_SPINUP);
       break;
     
@@ -283,8 +291,6 @@ void loop() {
               canvas_prevSignalCount = canvas_signalCount;
             }
             if (steadyRpsCount >= steadyRpsCountTarget) {
-              Serial.print("Steady rps: ");
-              Serial.println(canvas_rps);
               changeState(S_READY);
             }
          }
@@ -295,24 +301,23 @@ void loop() {
     case S_READY:
       // Possibility of doing setup things, or going straight to S_DARK
       setCommand(GO_DARK);
-      Serial.println("Ready");
       break;
     
     case S_DARK:
       if (loadedFrameNr != frameNr) {
         display_loadFrame(frame, frameNr);
-        for (int i = 0; i < 8; i++) {
-          Serial.println(frame[i]);
-        }
         loadedFrameNr = frameNr;
       }
-      canvas_rps = canvas_getRps();
-      setCommand(GO_ACTIVE);
+      canvas_rps = canvas_getRps(); //TODO: This does not need to be called every loop, since it only updates on canvas_signatState change.
+      if (canvas_signalState == LOW) {
+        setCommand(GO_ACTIVE);
+      }
       break;
     
     case S_ACTIVE:
       long frameTime = micros() - frameStartTime;
-      int currentCol = canvas_getCurrentCol(frameTime, canvas_rps);
+      currentCol = canvas_getCurrentCol(frameTime, canvas_rps);
+
       if (currentCol == -1) {
         setCommand(GO_DARK);
         prevCol = -1;
@@ -328,19 +333,17 @@ void loop() {
   }
 
   //debugPrint();
-
+  
   switch (displayCommand) {
     case NO_COMMAND:
       break;
     
     case GO_DARK:
       if (canvas_signalState == LOW) {
-        //debugPrint();
         if (displayState != S_READY) {
           canvas_setError(CANVAS_TIMEOUT);
         }
       } else {
-        //debugPrint();
         frameNr++;
         laser_showCol(-1);
         changeState(S_DARK);
