@@ -1,0 +1,47 @@
+#define FPS some_number //image updates per second
+#define RPS some_number //revolutions of screen per second, should be half of FPS
+#define STEPS_PER_REVOLUTION some_number //motor parameter
+#define PULSES_PER_STEP //motor parameter, potentially changeable
+#define ...
+
+void setState(int[x] leds, int[x] states) {
+   for led, state in zip(leds, states):
+      set_pin(led, state) 
+}
+
+void imageToStates(int[x, y] image) {
+   int col = from pulses calculate current pixel column
+   setState(leds, image[col])
+}
+
+int[x, y] getImage(int frame) {
+   return imageFeed[frame];
+}
+
+bool initMotor() {
+   "slowly" rev up motor to nominal speed
+   speed = current run speed
+   return (speed == nominal_speed)
+}
+
+void main() {
+   
+   // Initialization stuff
+   imageFeed = get image feed from memory
+   leds = pin addresses to the led pins
+   nominal_speed = something based off of FPS and other defines
+   frame = -1
+
+   while (!initMotor()) {
+      if motor init takes too long {
+         fault
+      }
+   }
+
+   while(1) {
+      frame++;
+      image = getImage[frame]
+      states = imageToStates[image]
+      setState[leds, states]
+   }
+}
