@@ -8,13 +8,19 @@ Created on Wed May  4 22:33:05 2022
 import serial
 import time
 
-COM_REQUEST_FRAME = 1
-COM_FRAME_RECEIVED = 2
+# Incoming from Arduino
+COM_READY = 1
+COM_REQUEST_FRAME = 2
+COM_FRAME_RECEIVED = 3
+
+# Outgoing to Arduino
 COM_FRAME_AVAILABLE = 1
-COM_READY = 3
+
 
 ready = False
 frameReceived = False
+
+frameNr = 0;
 
 text = [0b00011110,
         0b00001001,
@@ -29,33 +35,37 @@ text = [0b00011110,
 
 textBytes = bytearray(text)
 
-with serial.Serial(port="COM3", baudrate=115200, timeout=2) as ser:
+with serial.Serial(port="COM3", baudrate=115200, timeout=1) as ser:
          
     while True:
     
-        cmd = ser.read()
-        print(cmd)
+        if ser.in_waiting:    
+            cmd = ser.read()
+            print(cmd)
+        
+            if not ready:
+                if cmd[0] == COM_READY:
+                    ready = True
+                    ser.write([COM_FRAME_AVAILABLE])
+            else:
+                if cmd[0] == COM_REQUEST_FRAME:
+                    print('Frame request received. Sending frame...', frameNr)
+                    frameNr += 1
 # =============================================================================
-#         if len(cmd) != 0:
-#             if not ready:
-#                 if cmd[0] == COM_READY:
-#                     ready = True
-#             else:
-#                 if cmd[0] == COM_REQUEST_FRAME:
-#                     print('Frame request received. Sending frame...')
 #                     for i in range(len(text)):
 #                         ser.write([textBytes[i]])
 #                         print("Transmitting", textBytes[i])
-#                     
-#                     response = ser.read()
-#                     if response[0] == COM_FRAME_RECEIVED:
-#                         frameReceived = True
-#                         print("Arduino reports frame received!")
-#                     else:
-#                         print("Wrongo respongo:")
-#                         print('%i' % response[0])
-#         elif ready and frameReceived:
-#             ser.write([COM_FRAME_AVAILABLE])
-#             frameReceived = False
 # =============================================================================
+                    print('Actually, it already knows the frame')
+                    
+                    response = ser.read()
+                    if response[0] == COM_FRAME_RECEIVED:
+                        frameReceived = True
+                        print("Arduino reports frame received!")
+                    else:
+                        print("Wrongo respongo:")
+                        print('%i' % response[0])
+        elif ready and frameReceived:
+            ser.write([COM_FRAME_AVAILABLE])
+            frameReceived = False
 

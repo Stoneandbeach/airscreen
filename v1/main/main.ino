@@ -16,6 +16,11 @@ enum displayCommand_t {
   STOP
 };
 
+enum display_error_t {
+  DISPLAY_NO_ERROR = 0,
+  DISPLAY_UNKNOWN_COMS
+};
+
 enum canvas_error_t {
   CANVAS_NO_ERROR = 0,
   CANVAS_TIMEOUT,       // This error is set if command GO_ACTIVE or GO_DARK is set while canvas_signalState == LOW
@@ -35,6 +40,7 @@ enum com_outg_msg_t {
 // Display (i.e., overall) declarations
 displayState_t displayState = S_INIT;
 displayCommand_t displayCommand = NO_COMMAND;
+display_error_t display_error = DISPLAY_NO_ERROR;
 const int ONBOARD_LED_PIN = 13;
 const float DISPLAY_RADIUS = 75; // Radius of the swept volume in mm
 const float DISPLAY_ANGLE_LIMIT = M_PI / 4; // Outer angle limit of the display volume, from axis parallel to laser beams
@@ -131,6 +137,32 @@ void display_loadFrame(uint8_t *frameArray, int nr) {
   }
 }
 
+void display_send(int cmd) {
+  Serial.write(cmd);
+}
+
+void display_processComs() {
+  if (Serial.available()) {
+    uint8_t coms = Serial.read();
+    switch (coms) {
+      case COM_FRAME_AVAILABLE:
+        display_send(COM_REQUEST_FRAME);
+        if (loadedFrameNr != frameNr) {
+          display_loadFrame(frame, frameNr);
+          loadedFrameNr = frameNr;
+        }
+        display_send(COM_FRAME_RECEIVED);
+        break;
+      default:
+        display_setError(DISPLAY_UNKNOWN_COMS);
+    }
+  }
+}
+
+void display_setError(int error) {
+  display_error = error;
+}
+
 // Canvas functions
 void canvas_setError(canvas_error_t error) {
   canvas_error = error;
@@ -217,7 +249,7 @@ void debugPrint() {
   Serial.println();
 }
 
-void debugPrintTiming() {
+void debugPrintTiming(int currentCol) {
   Serial.print(currentCol);
   Serial.print(",");
   Serial.print(canvas_signalState);
@@ -234,6 +266,10 @@ void debugLasers() {
   int col = canvas_getCurrentCol(debugTimeNow, canvas_rps);
   int debugLaserState = col % 2;
   laser_setState(0, debugLaserState);
+}
+
+void debugLed(int state) {
+  digitalWrite(ONBOARD_LED_PIN, state);
 }
 
 // Interrupts
@@ -273,6 +309,7 @@ void loop() {
   //debugLasers();
 
   int currentCol = -2;
+  long now = micros();
   
   switch (displayState) {
     case S_INIT:
@@ -300,14 +337,13 @@ void loop() {
     
     case S_READY:
       // Possibility of doing setup things, or going straight to S_DARK
+      display_send(COM_READY);
       setCommand(GO_DARK);
       break;
     
     case S_DARK:
-      if (loadedFrameNr != frameNr) {
-        display_loadFrame(frame, frameNr);
-        loadedFrameNr = frameNr;
-      }
+      debugLed(0);
+      display_processComs();
       canvas_rps = canvas_getRps(); //TODO: This does not need to be called every loop, since it only updates on canvas_signatState change.
       if (canvas_signalState == LOW) {
         setCommand(GO_ACTIVE);
@@ -315,7 +351,8 @@ void loop() {
       break;
     
     case S_ACTIVE:
-      long frameTime = micros() - frameStartTime;
+      debugLed(1);
+      long frameTime = now - frameStartTime;
       currentCol = canvas_getCurrentCol(frameTime, canvas_rps);
 
       if (currentCol == -1) {
@@ -333,6 +370,7 @@ void loop() {
   }
 
   //debugPrint();
+  //debugPrintTiming(currentCol);
   
   switch (displayCommand) {
     case NO_COMMAND:
@@ -342,28 +380,29 @@ void loop() {
       if (canvas_signalState == LOW) {
         if (displayState != S_READY) {
           canvas_setError(CANVAS_TIMEOUT);
+          setCommand(NO_COMMAND);
         }
       } else {
         frameNr++;
         laser_showCol(-1);
         changeState(S_DARK);
+        setCommand(NO_COMMAND);
       }
       break;
     
     case GO_ACTIVE:
       if (canvas_signalState == HIGH) {
-        frameStartTime = micros();
+        frameStartTime = now;
         changeState(S_ACTIVE);
-      } else {
-        canvas_setError(CANVAS_TIMEOUT);
+        setCommand(NO_COMMAND);
       }
       break;
     
     case STOP:
+      changeState(S_STOPPED);
       targetRps = 0;
       break;
   }
-  setCommand(NO_COMMAND);
   
   // If I want variable rps, make a runMotor call here. Also, actually create that function.
   // canvas_runMotor(targetRps);
