@@ -18,7 +18,8 @@ enum displayCommand_t {
 
 enum display_error_t {
   DISPLAY_NO_ERROR = 0,
-  DISPLAY_UNKNOWN_COMS
+  DISPLAY_UNKNOWN_COMS,
+  DISPLAY_FRAME_READ_TIMEOUT
 };
 
 enum canvas_error_t {
@@ -50,6 +51,7 @@ uint8_t frame[DISPLAY_NR_COLS]; // THIS NEEDS TO BE EXPANDED WHEN I HAVE MORE LA
 int frameNr = 0;
 int loadedFrameNr = 0;
 long frameStartTime;
+long display_frameTime;
 int prevCol = 0;
 
 // Canvas declarations
@@ -96,6 +98,31 @@ void changeState(displayState_t state) {
 }
 
 void display_loadFrame(uint8_t *frameArray, int nr) {
+  if (nr == -1) {
+    display_loadDefaultFrame(frameArray, nr);
+  } else {
+    long darkTime = canvas_highTimes[canvas_signalHighCount % canvas_averageRpsOverCounts] - canvas_lowTimes[canvas_signalLowCount % canvas_averageRpsOverCounts];
+    if (darkTime < 0) {
+      darkTime *= -1;
+    }
+    uint8_t columnIdx = 0;
+    while (display_frameTime < 0.8 * darkTime && columnIdx < DISPLAY_NR_COLS) {
+      if (Serial.available()) {
+        frameArray[columnIdx] = Serial.read();
+        columnIdx++;
+      }
+    }
+    if (columnIdx == DISPLAY_NR_COLS) {
+      display_send(COM_FRAME_RECEIVED);
+    } else {
+      display_setError(DISPLAY_FRAME_READ_TIMEOUT);
+      // TODO: Send a timeout message.
+      // TODO: Also, make sure that the COMS don't break here, since COM_FRAME_RECEIVED won't be sent.
+    }
+  }
+}
+
+void display_loadDefaultFrame(uint8_t *frameArray, int nr) {
   uint8_t columns[11];
   if ((nr / 10) % 2 == 0) {
     uint8_t temp[11] = {0b00011111,
@@ -146,12 +173,11 @@ void display_processComs() {
     uint8_t coms = Serial.read();
     switch (coms) {
       case COM_FRAME_AVAILABLE:
-        display_send(COM_REQUEST_FRAME);
         if (loadedFrameNr != frameNr) {
+          display_send(COM_REQUEST_FRAME);
           display_loadFrame(frame, frameNr);
           loadedFrameNr = frameNr;
         }
-        display_send(COM_FRAME_RECEIVED);
         break;
       default:
         display_setError(DISPLAY_UNKNOWN_COMS);
@@ -352,8 +378,8 @@ void loop() {
     
     case S_ACTIVE:
       debugLed(1);
-      long frameTime = now - frameStartTime;
-      currentCol = canvas_getCurrentCol(frameTime, canvas_rps);
+      display_frameTime = now - frameStartTime;
+      currentCol = canvas_getCurrentCol(display_frameTime, canvas_rps);
 
       if (currentCol == -1) {
         setCommand(GO_DARK);
