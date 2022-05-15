@@ -1,4 +1,17 @@
-#include "math.h"
+#include <math.h>
+#include <Arduino.h>
+#include <U8g2lib.h>
+
+#ifdef U8X8_HAVE_HW_SPI
+#include <SPI.h>
+#endif
+
+#ifdef U8X8_HAVE_HW_I2C
+#include <Wire.h>
+#endif
+
+// Initialize high speed I2C for OLED screen
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);
 
 enum displayState_t {
   S_INIT = 0,
@@ -114,6 +127,7 @@ void display_loadFrame(uint8_t *frameArray, int nr) {
     }
     if (columnIdx == DISPLAY_NR_COLS) {
       display_send(COM_FRAME_RECEIVED);
+      //debugLed(0);
     } else {
       display_setError(DISPLAY_FRAME_READ_TIMEOUT);
       // TODO: Send a timeout message.
@@ -169,15 +183,15 @@ void display_send(int cmd) {
 }
 
 void display_processComs() {
+    
   if (Serial.available()) {
+    //debugLed(1);
     uint8_t coms = Serial.read();
     switch (coms) {
       case COM_FRAME_AVAILABLE:
-        if (loadedFrameNr != frameNr) {
           display_send(COM_REQUEST_FRAME);
           display_loadFrame(frame, frameNr);
           loadedFrameNr = frameNr;
-        }
         break;
       default:
         display_setError(DISPLAY_UNKNOWN_COMS);
@@ -314,6 +328,10 @@ void canvas_signalInterrupt() {
 // Setup and main loop
 void setup() {
   Serial.begin(115200);
+
+  u8g2.begin();
+  //u8g2.setFont(u8g2_font_ncenB18_tf);
+  u8g2.setFont(u8g2_font_ncenB08_tr);
   
   // Display
   pinMode(ONBOARD_LED_PIN, OUTPUT);
@@ -330,12 +348,28 @@ void setup() {
   }
 }
 
+long lastDebugTime = micros();
+
 void loop() {
 
   //debugLasers();
 
   int currentCol = -2;
   long now = micros();
+  /*long dt = now - lastDebugTime;
+  if (dt > 1000000) {
+    lastDebugTime = now;
+    Serial.write(255);
+  }*/
+
+  /*
+  char columnStr[6];
+  int cond1 = dt;
+  itoa(cond1, columnStr, 10);
+  u8g2.clearBuffer();
+  u8g2.drawStr(0, 10, columnStr);
+  u8g2.sendBuffer();
+  */
   
   switch (displayState) {
     case S_INIT:
@@ -355,6 +389,7 @@ void loop() {
             }
             if (steadyRpsCount >= steadyRpsCountTarget) {
               changeState(S_READY);
+              display_send(COM_READY);
             }
          }
          deltaRps = canvas_rps - prevRps;
@@ -363,7 +398,6 @@ void loop() {
     
     case S_READY:
       // Possibility of doing setup things, or going straight to S_DARK
-      display_send(COM_READY);
       setCommand(GO_DARK);
       break;
     
