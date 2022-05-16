@@ -58,7 +58,7 @@ display_error_t display_error = DISPLAY_NO_ERROR;
 const int ONBOARD_LED_PIN = 13;
 const float DISPLAY_RADIUS = 75; // Radius of the swept volume in mm
 const float DISPLAY_ANGLE_LIMIT = M_PI / 4; // Outer angle limit of the display volume, from axis parallel to laser beams
-const int DISPLAY_NR_COLS = 12;
+const int DISPLAY_NR_COLS = 10;
 const float DISPLAY_DIST_FROM_AXIS = 40; // Distance from canvas axis to display surface in mm
 uint8_t frame[DISPLAY_NR_COLS]; // THIS NEEDS TO BE EXPANDED WHEN I HAVE MORE LASERS
 int frameNr = 0;
@@ -66,6 +66,7 @@ int loadedFrameNr = 0;
 long frameStartTime;
 long display_frameTime;
 int prevCol = 0;
+uint8_t display_frameReadTimeout = 0;
 
 // Canvas declarations
 float canvas_rps = 0;
@@ -110,15 +111,19 @@ void changeState(displayState_t state) {
   }
 }
 
+uint8_t columnIdx = 0;
+
 void display_loadFrame(uint8_t *frameArray, int nr) {
   if (nr == -1) {
     display_loadDefaultFrame(frameArray, nr);
   } else {
     long darkTime = canvas_highTimes[canvas_signalHighCount % canvas_averageRpsOverCounts] - canvas_lowTimes[canvas_signalLowCount % canvas_averageRpsOverCounts];
-    if (darkTime < 0) {
+    if (darkTime < 0) { // This is to make sure darkTime is always positive regardless of when it is calculated. TODO: Check if this is necessary.
       darkTime *= -1;
     }
-    uint8_t columnIdx = 0;
+    if (!display_frameReadTimeout) {
+      columnIdx = 0;
+    }
     while (display_frameTime < 0.8 * darkTime && columnIdx < DISPLAY_NR_COLS) {
       if (Serial.available()) {
         frameArray[columnIdx] = Serial.read();
@@ -127,9 +132,11 @@ void display_loadFrame(uint8_t *frameArray, int nr) {
     }
     if (columnIdx == DISPLAY_NR_COLS) {
       display_send(COM_FRAME_RECEIVED);
+      display_frameReadTimeout = 0;
       //debugLed(0);
     } else {
       display_setError(DISPLAY_FRAME_READ_TIMEOUT);
+      display_frameReadTimeout = 1;
       // TODO: Send a timeout message.
       // TODO: Also, make sure that the COMS don't break here, since COM_FRAME_RECEIVED won't be sent.
     }
@@ -180,27 +187,36 @@ void display_loadDefaultFrame(uint8_t *frameArray, int nr) {
 
 void display_send(int cmd) {
   Serial.write(cmd);
+  debugScreen(cmd, 2);
 }
 
 void display_processComs() {
     
   if (Serial.available()) {
     //debugLed(1);
-    uint8_t coms = Serial.read();
-    switch (coms) {
-      case COM_FRAME_AVAILABLE:
-          display_send(COM_REQUEST_FRAME);
-          display_loadFrame(frame, frameNr);
-          loadedFrameNr = frameNr;
-        break;
-      default:
-        display_setError(DISPLAY_UNKNOWN_COMS);
+    if (display_frameReadTimeout) {
+      display_loadFrame(frame, frameNr);
+    } else {
+      uint8_t coms = Serial.read();
+      debugScreen(coms, 1);
+      switch (coms) {
+        case COM_FRAME_AVAILABLE:
+            display_send(COM_REQUEST_FRAME);
+            display_loadFrame(frame, frameNr);
+            if (!display_frameReadTimeout) { // TODO: The frame-counting logic is currently broken and also does nothing.
+              loadedFrameNr = frameNr;
+            }
+          break;
+        default:
+          display_setError(DISPLAY_UNKNOWN_COMS);
+      }
     }
   }
 }
 
 void display_setError(int error) {
   display_error = error;
+  debugScreen(error, 3);
 }
 
 // Canvas functions
@@ -312,6 +328,25 @@ void debugLed(int state) {
   digitalWrite(ONBOARD_LED_PIN, state);
 }
 
+int debugScreenArray[] = {0, 0, 0}; // TODO: Make this a char array if that is possible
+
+// Print last sent message, last received message and last error on OLED screen
+void debugScreen(int msg, int row) {
+  debugScreenArray[row - 1] = msg;
+  if (row == 3) {
+    char msgStr[3];
+    int cond1;
+    u8g2.clearBuffer();
+    for (int i = 0; i < 3; i++) {
+      cond1 = debugScreenArray[i];
+      itoa(cond1, msgStr, 10);
+      int ypos = 15 * (i + 1);
+      u8g2.drawStr(0, ypos, msgStr);  
+    }
+    u8g2.sendBuffer();
+  }
+}
+
 // Interrupts
 void canvas_signalInterrupt() {
   canvas_signalCount++;
@@ -331,7 +366,8 @@ void setup() {
 
   u8g2.begin();
   //u8g2.setFont(u8g2_font_ncenB18_tf);
-  u8g2.setFont(u8g2_font_ncenB08_tr);
+  u8g2.setFont(u8g2_font_ncenB12_tf);
+  //u8g2.setFont(u8g2_font_ncenB08_tr);
   
   // Display
   pinMode(ONBOARD_LED_PIN, OUTPUT);
@@ -361,15 +397,6 @@ void loop() {
     lastDebugTime = now;
     Serial.write(255);
   }*/
-
-  /*
-  char columnStr[6];
-  int cond1 = dt;
-  itoa(cond1, columnStr, 10);
-  u8g2.clearBuffer();
-  u8g2.drawStr(0, 10, columnStr);
-  u8g2.sendBuffer();
-  */
   
   switch (displayState) {
     case S_INIT:

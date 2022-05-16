@@ -9,7 +9,7 @@ import serial
 import time
 from letterToBits import *
 
-DISPLAY_NR_COLS = 12
+DISPLAY_NR_COLS = 10
 
 def transmitText(text):
     byteList = []
@@ -100,6 +100,8 @@ with serial.Serial(port="COM3", baudrate=115200, timeout=1) as ser:
                     
         if frameReceived:
             text = input('Please enter text to transmit:')
+            if text == '':
+                text = ' '
             #text = 'ROOMBA'
             #time.sleep(.1)
             print("Sending FRAME AVAILABLE message.")
