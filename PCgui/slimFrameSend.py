@@ -31,12 +31,12 @@ def transmitText(text):
         print("Transmitting", textBytes[i])
 
 # Incoming from Arduino
-COM_READY = 1
-COM_REQUEST_FRAME = 2
-COM_FRAME_RECEIVED = 3
+COM_READY = 0b01000000
+COM_REQUEST_FRAME = 0b01000001
+COM_FRAME_RECEIVED = 0b01000010
 
 # Outgoing to Arduino
-COM_FRAME_AVAILABLE = 1
+COM_FRAME_AVAILABLE = 0b01000000
 
 
 ready = False

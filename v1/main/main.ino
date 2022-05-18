@@ -42,13 +42,13 @@ enum canvas_error_t {
 };
 
 enum com_inc_msg_t {
-  COM_FRAME_AVAILABLE = 1
+  COM_FRAME_AVAILABLE = 0b01000000
 };
 
 enum com_outg_msg_t {
-  COM_READY = 1,
-  COM_REQUEST_FRAME = 2,
-  COM_FRAME_RECEIVED = 3
+  COM_READY = 0b01000000,
+  COM_REQUEST_FRAME = 0b01000001,
+  COM_FRAME_RECEIVED = 0b01000010
 };
 
 // Display (i.e., overall) declarations
@@ -141,6 +141,7 @@ void display_loadFrame(uint8_t *frameArray, int nr) {
       // TODO: Also, make sure that the COMS don't break here, since COM_FRAME_RECEIVED won't be sent.
     }
   }
+  Serial.write(display_frameReadTimeout);
 }
 
 void display_loadDefaultFrame(uint8_t *frameArray, int nr) {
@@ -197,7 +198,7 @@ void display_processComs() {
     if (display_frameReadTimeout) {
       display_loadFrame(frame, frameNr);
     } else {
-      uint8_t coms = Serial.read();
+      int coms = Serial.read();
       debugScreen(coms, 1);
       switch (coms) {
         case COM_FRAME_AVAILABLE:
@@ -332,6 +333,7 @@ int debugScreenArray[] = {0, 0, 0}; // TODO: Make this a char array if that is p
 
 // Print last sent message, last received message and last error on OLED screen
 void debugScreen(int msg, int row) {
+  return;
   debugScreenArray[row - 1] = msg;
   if (row == 3) {
     char msgStr[3];
