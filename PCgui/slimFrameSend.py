@@ -9,7 +9,7 @@ import serial
 import time
 from letterToBits import *
 
-DISPLAY_NR_COLS = 10
+DISPLAY_NR_COLS = 3
 
 def transmitText(text):
     byteList = []
@@ -29,6 +29,17 @@ def transmitText(text):
     for i in range(len(textBytes)):
         ser.write([textBytes[i]])
         print("Transmitting", textBytes[i])
+        
+def checkText(text):
+    textOk = True
+    okLetterUnicodes = [ord(' ')]
+    for i in range(ord('A'), ord('Z') + 1):
+        okLetterUnicodes.append(i)
+    for letter in text:
+        if ord(letter) not in okLetterUnicodes:
+            textOk = False
+            break
+    return textOk
 
 # Incoming from Arduino
 COM_READY = 0b01000000
@@ -41,27 +52,9 @@ COM_FRAME_AVAILABLE = 0b01000000
 
 ready = False
 frameReceived = True
+comsProcessed = False
 
 frameNr = 0;
-
-defaultText =  [0b00000000,
-                0b00000000,
-                0b00010000,
-                0b00000000,
-                0b00000000,
-                0b00010000,
-                0b00000000,
-                0b00000000,
-                0b00010000,
-                0b00000000,
-                0b00000000,
-                0b00000000]
-
-text = defaultText
-
-textBytes = bytearray(text)
-
-dummyFrame = 4;
 
 print('Arduino loading, please wait...')
 
@@ -85,23 +78,33 @@ with serial.Serial(port="COM3", baudrate=115200, timeout=1) as ser:
             if cmd[0] == COM_REQUEST_FRAME:
                 print('Frame request received. Sending frame...', frameNr)
                 frameNr += 1
-                
-                transmitText(text)
+                try:
+                    transmitText(text)
+                except KeyError:
+                    print("Cannot send input! Only use capital letters.")
+                    frameReceived = True # Note this is not good practice!
+                comsProcessed = True
                 
             elif cmd[0] == COM_FRAME_RECEIVED:
                 frameReceived = True
                 print("Arduino reports frame received!")
+                comsProcessed = True
             
             else:
                 print("Wrongo respongo:")
                 print('%i' % cmd[0])
-                #else:
-                #    print("Response timeout!")
+                comsProcessed = True
+        
+        if comsProcessed:
+            print('Coms', cmd, 'processed.')
+            comsProcessed = False
                     
         if frameReceived:
-            text = input('Please enter text to transmit:')
-            if text == '':
-                text = ' '
+            textOk = False
+            while not textOk:
+                text = input('Please enter text to transmit:')
+                textOk = checkText(text)
+                
             #text = 'ROOMBA'
             #time.sleep(.1)
             print("Sending FRAME AVAILABLE message.")

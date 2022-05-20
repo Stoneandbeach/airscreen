@@ -58,7 +58,7 @@ display_error_t display_error = DISPLAY_NO_ERROR;
 const int ONBOARD_LED_PIN = 13;
 const float DISPLAY_RADIUS = 75; // Radius of the swept volume in mm
 const float DISPLAY_ANGLE_LIMIT = M_PI / 4; // Outer angle limit of the display volume, from axis parallel to laser beams
-const int DISPLAY_NR_COLS = 10;
+const int DISPLAY_NR_COLS = 3;
 const float DISPLAY_DIST_FROM_AXIS = 40; // Distance from canvas axis to display surface in mm
 uint8_t frame[DISPLAY_NR_COLS]; // THIS NEEDS TO BE EXPANDED WHEN I HAVE MORE LASERS
 int frameNr = 0;
@@ -141,7 +141,7 @@ void display_loadFrame(uint8_t *frameArray, int nr) {
       // TODO: Also, make sure that the COMS don't break here, since COM_FRAME_RECEIVED won't be sent.
     }
   }
-  Serial.write(display_frameReadTimeout);
+  Serial.write(columnIdx);
 }
 
 void display_loadDefaultFrame(uint8_t *frameArray, int nr) {
@@ -400,6 +400,7 @@ void loop() {
     Serial.write(255);
   }*/
   
+  // Main state machine
   switch (displayState) {
     case S_INIT:
       // Possibility of doing startup checks, like measuring feedback from diodes if available
@@ -431,16 +432,12 @@ void loop() {
       break;
     
     case S_DARK:
-      debugLed(0);
-      display_processComs();
-      canvas_rps = canvas_getRps(); //TODO: This does not need to be called every loop, since it only updates on canvas_signatState change.
       if (canvas_signalState == LOW) {
         setCommand(GO_ACTIVE);
       }
       break;
     
     case S_ACTIVE:
-      debugLed(1);
       display_frameTime = now - frameStartTime;
       currentCol = canvas_getCurrentCol(display_frameTime, canvas_rps);
 
@@ -461,6 +458,7 @@ void loop() {
   //debugPrint();
   //debugPrintTiming(currentCol);
   
+  // Main command switch
   switch (displayCommand) {
     case NO_COMMAND:
       break;
@@ -476,14 +474,18 @@ void loop() {
         laser_showCol(-1);
         changeState(S_DARK);
         setCommand(NO_COMMAND);
+        debugLed(0);
+        canvas_rps = canvas_getRps();
+        display_processComs(); // Read incoming serial coms and react accordingly
       }
       break;
     
     case GO_ACTIVE:
       if (canvas_signalState == HIGH) {
-        frameStartTime = now;
         changeState(S_ACTIVE);
         setCommand(NO_COMMAND);
+        frameStartTime = now; // TODO: Change this so that frameStartTime = the latest canvas_highTime, since that gives the best reference for how long I've got before the active state should end.
+        debugLed(1);
       }
       break;
     
