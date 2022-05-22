@@ -9,7 +9,7 @@ import serial
 import time
 from letterToBits import *
 
-DISPLAY_NR_COLS = 3
+DISPLAY_NR_COLS = 50
 
 def transmitText(text):
     byteList = []
@@ -22,6 +22,9 @@ def transmitText(text):
         byteList.append(spaceByte)
     
     byteList = byteList[:DISPLAY_NR_COLS]
+    
+    while len(byteList) < DISPLAY_NR_COLS:
+        byteList.append(spaceByte)
     
     print(byteList)
     
@@ -63,6 +66,7 @@ with serial.Serial(port="COM3", baudrate=115200, timeout=1) as ser:
     while not ready:
         if ser.in_waiting:
             cmd = ser.read()
+            print(cmd)
             if cmd[0] == COM_READY:
                 ready = True
                 print('Arduino reports READY')
@@ -71,7 +75,7 @@ with serial.Serial(port="COM3", baudrate=115200, timeout=1) as ser:
     
     while True:
         
-        if ser.in_waiting:
+        while ser.in_waiting:
             cmd = ser.read()
             print(cmd)
         
@@ -93,10 +97,12 @@ with serial.Serial(port="COM3", baudrate=115200, timeout=1) as ser:
             else:
                 print("Wrongo respongo:")
                 print('%i' % cmd[0])
+                print()
                 comsProcessed = True
         
         if comsProcessed:
             print('Coms', cmd, 'processed.')
+            print()
             comsProcessed = False
                     
         if frameReceived:
@@ -104,6 +110,8 @@ with serial.Serial(port="COM3", baudrate=115200, timeout=1) as ser:
             while not textOk:
                 text = input('Please enter text to transmit:')
                 textOk = checkText(text)
+                if not textOk:
+                    print('Text not ok:', text)
                 
             #text = 'ROOMBA'
             #time.sleep(.1)

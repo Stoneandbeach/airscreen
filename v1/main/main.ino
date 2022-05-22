@@ -58,13 +58,15 @@ display_error_t display_error = DISPLAY_NO_ERROR;
 const int ONBOARD_LED_PIN = 13;
 const float DISPLAY_RADIUS = 75; // Radius of the swept volume in mm
 const float DISPLAY_ANGLE_LIMIT = M_PI / 4; // Outer angle limit of the display volume, from axis parallel to laser beams
-const int DISPLAY_NR_COLS = 3;
+const int DISPLAY_NR_COLS = 50; // Number of columns in the display
 const float DISPLAY_DIST_FROM_AXIS = 40; // Distance from canvas axis to display surface in mm
 uint8_t frame[DISPLAY_NR_COLS]; // THIS NEEDS TO BE EXPANDED WHEN I HAVE MORE LASERS
 int frameNr = 0;
 int loadedFrameNr = 0;
 long frameStartTime;
 long display_frameTime;
+long stateStartTime = 0;
+long display_stateTime;
 int prevCol = 0;
 uint8_t display_frameReadTimeout = 0;
 
@@ -109,6 +111,8 @@ void changeState(displayState_t state) {
   if (!fatalError) {
     displayState = state;
   }
+  display_stateTime = 0;
+  stateStartTime = micros();
 }
 
 uint8_t columnIdx = 0;
@@ -117,17 +121,24 @@ void display_loadFrame(uint8_t *frameArray, int nr) {
   if (nr == -1) {
     display_loadDefaultFrame(frameArray, nr);
   } else {
-    long darkTime = canvas_highTimes[canvas_signalHighCount % canvas_averageRpsOverCounts] - canvas_lowTimes[canvas_signalLowCount % canvas_averageRpsOverCounts];
+    //long darkTime = canvas_highTimes[canvas_signalHighCount % canvas_averageRpsOverCounts] - canvas_lowTimes[canvas_signalLowCount % canvas_averageRpsOverCounts];
+    float spr = 1 / canvas_rps;
+    float upr = 1000000 * spr;
+    float darkTime = upr / 4; // Microseconds per quarter revolution, i.e., how long the downtime between two ACTIVE periods is.
     if (darkTime < 0) { // This is to make sure darkTime is always positive regardless of when it is calculated. TODO: Check if this is necessary.
       darkTime *= -1;
     }
     if (!display_frameReadTimeout) {
       columnIdx = 0;
     }
-    while (display_frameTime < 0.8 * darkTime && columnIdx < DISPLAY_NR_COLS) {
+    //while ((display_frameTime < 0.8 * darkTime) && (columnIdx < DISPLAY_NR_COLS)) {
+    while (display_stateTime < 0.8 * darkTime) {
       if (Serial.available()) {
         frameArray[columnIdx] = Serial.read();
         columnIdx++;
+      }
+      if (columnIdx == DISPLAY_NR_COLS) {
+        darkTime = 0;
       }
     }
     if (columnIdx == DISPLAY_NR_COLS) {
@@ -394,11 +405,7 @@ void loop() {
 
   int currentCol = -2;
   long now = micros();
-  /*long dt = now - lastDebugTime;
-  if (dt > 1000000) {
-    lastDebugTime = now;
-    Serial.write(255);
-  }*/
+  display_stateTime = now - stateStartTime;
   
   // Main state machine
   switch (displayState) {
