@@ -9,7 +9,7 @@ import serial
 import time
 from letterToBits import *
 
-DISPLAY_NR_COLS = 50
+DISPLAY_NR_COLS = 28
 
 def transmitText(text):
     byteList = []
@@ -31,7 +31,6 @@ def transmitText(text):
     textBytes = bytearray(byteList)
     for i in range(len(textBytes)):
         ser.write([textBytes[i]])
-        print("Transmitting", textBytes[i])
         
 def checkText(text):
     textOk = True
