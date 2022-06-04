@@ -1,6 +1,6 @@
 #include <math.h>
 #include <Arduino.h>
-#include <U8g2lib.h>
+/*#include <U8g2lib.h>
 
 #ifdef U8X8_HAVE_HW_SPI
 #include <SPI.h>
@@ -9,9 +9,10 @@
 #ifdef U8X8_HAVE_HW_I2C
 #include <Wire.h>
 #endif
+*/
 
 // Initialize high speed I2C for OLED screen
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);
+//U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);
 
 enum displayState_t {
   S_INIT = 0,
@@ -199,7 +200,7 @@ void display_loadDefaultFrame(uint8_t *frameArray, int nr) {
 
 void display_send(int cmd) {
   Serial.write(cmd);
-  debugScreen(cmd, 2);
+//  debugScreen(cmd, 2);
 }
 
 void display_processComs() {
@@ -210,7 +211,7 @@ void display_processComs() {
       display_loadFrame(frame, frameNr);
     } else {
       int coms = Serial.read();
-      debugScreen(coms, 1);
+//      debugScreen(coms, 1);
       switch (coms) {
         case COM_FRAME_AVAILABLE:
             display_send(COM_REQUEST_FRAME);
@@ -228,7 +229,7 @@ void display_processComs() {
 
 void display_setError(int error) {
   display_error = error;
-  debugScreen(error, 3);
+//  debugScreen(error, 3);
 }
 
 // Canvas functions
@@ -260,17 +261,21 @@ float canvas_getRps() {
   }
 }
 
+const float twoPi = 2 * M_PI;
+const float y = DISPLAY_RADIUS * sin(DISPLAY_ANGLE_LIMIT); // y position of the display surface
+const float D = 2 * DISPLAY_RADIUS * cos(DISPLAY_ANGLE_LIMIT); // The width of the display surface
+const float Dhalf = D / 2;
+const int n = DISPLAY_NR_COLS + 1; //+ Number of display columns, plus one last, dark, padded columns
+const float colWidth = D / n; // The width of a column in the display surface
+int8_t currentCol = 0; // The currently active column
+
 int canvas_getCurrentCol(long frameTime, float rps) {
   // Calculate which column to display depending on rps and current frame time
   float t = ((float) frameTime) / 1000000; // Uptime of the current frame in seconds
-  float w = rps * 2 * M_PI; // Angular frequency of the canvas
-  float y = DISPLAY_RADIUS * sin(DISPLAY_ANGLE_LIMIT); // y position of the display surface
+  float w = rps * twoPi; // Angular frequency of the canvas
   float x = y / tan(w * t + DISPLAY_ANGLE_LIMIT); // x position along the display surface. Angle is calculated in relation to the laser beam
-  float D = 2 * DISPLAY_RADIUS * cos(DISPLAY_ANGLE_LIMIT); // The width of the display surface
-  int n = DISPLAY_NR_COLS + 1; //+ Number of display columns, plus one last, dark, padded columns
-  float colWidth = D / n;
-  x = -x + D / 2; // Rescaling of x to 0 < x < D
-  for (int i = 0; i < DISPLAY_NR_COLS; i++) {
+  x = -x + Dhalf; // Rescaling of x to 0 < x < D
+  for (int i = currentCol; i < DISPLAY_NR_COLS; i++) {
     if ((x >= i * colWidth) && (x < (i + 1) * colWidth)) { // Find the segment of D in which x lies
       return i;
     }
@@ -342,6 +347,7 @@ void debugLed(int state) {
 
 int debugScreenArray[] = {0, 0, 0}; // TODO: Make this a char array if that is possible
 
+/*
 // Print last sent message, last received message and last error on OLED screen
 void debugScreen(int msg, int row) {
   return;
@@ -359,6 +365,7 @@ void debugScreen(int msg, int row) {
     u8g2.sendBuffer();
   }
 }
+*/
 
 // Interrupts
 void canvas_signalInterrupt() {
@@ -377,10 +384,12 @@ void canvas_signalInterrupt() {
 void setup() {
   Serial.begin(115200);
 
+/*
   u8g2.begin();
   //u8g2.setFont(u8g2_font_ncenB18_tf);
   u8g2.setFont(u8g2_font_ncenB12_tf);
   //u8g2.setFont(u8g2_font_ncenB08_tr);
+*/
   
   // Display
   pinMode(ONBOARD_LED_PIN, OUTPUT);
@@ -403,7 +412,6 @@ void loop() {
 
   //debugLasers();
 
-  int currentCol = -2;
   long now = micros();
   display_stateTime = now - stateStartTime;
   
