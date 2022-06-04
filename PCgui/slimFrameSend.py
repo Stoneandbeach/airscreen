@@ -9,7 +9,7 @@ import serial
 import time
 from letterToBits import *
 
-DISPLAY_NR_COLS = 28
+DISPLAY_NR_COLS = 16
 
 def transmitText(text):
     byteList = []
@@ -34,8 +34,10 @@ def transmitText(text):
         
 def checkText(text):
     textOk = True
-    okLetterUnicodes = [ord(' ')]
-    for i in range(ord('A'), ord('Z') + 1):
+    okLetterUnicodes = [ord(" ")]
+    for i in range(ord("A"), ord("Z") + 1):
+        okLetterUnicodes.append(i)
+    for i in range(ord("0"), ord("9") + 1):
         okLetterUnicodes.append(i)
     for letter in text:
         if ord(letter) not in okLetterUnicodes:

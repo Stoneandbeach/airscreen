@@ -59,7 +59,7 @@ display_error_t display_error = DISPLAY_NO_ERROR;
 const int ONBOARD_LED_PIN = 13;
 const float DISPLAY_RADIUS = 75; // Radius of the swept volume in mm
 const float DISPLAY_ANGLE_LIMIT = M_PI / 4; // Outer angle limit of the display volume, from axis parallel to laser beams
-const int DISPLAY_NR_COLS = 20; // Number of columns in the display
+const int DISPLAY_NR_COLS = 16; // Number of columns in the display
 const float DISPLAY_DIST_FROM_AXIS = 40; // Distance from canvas axis to display surface in mm
 uint8_t frame[DISPLAY_NR_COLS]; // THIS NEEDS TO BE EXPANDED WHEN I HAVE MORE LASERS
 int frameNr = 0;
