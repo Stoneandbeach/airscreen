@@ -1,3 +1,20 @@
+// Canvas variable initialization
+void canvas_initialize() {
+  
+  for (int layer = 0; layer < DISPLAY_NR_LAYERS; layer++) {
+    DISPLAY_DIST_FROM_AXIS[layer] = DISPLAY_MIN_DIST_FROM_AXIS + DISPLAY_DIST_BETWEEN_LAYERS * (DISPLAY_NR_LAYERS - 1 - layer);
+    Serial.println(Dhalf);
+    float angle = (float) atan(Dhalf / DISPLAY_DIST_FROM_AXIS[layer]);
+    DISPLAY_ANGLE_LIMIT[layer] = angle;
+    Serial.print("Layer ");
+    Serial.print(layer);
+    Serial.print(" at dist ");
+    Serial.print(DISPLAY_DIST_FROM_AXIS[layer]);
+    Serial.print(" and angle ");
+    Serial.println(angle);
+  }
+}
+
 // Canvas functions
 void canvas_setError(canvas_error_t error) {
   canvas_error = error;
@@ -27,14 +44,12 @@ float canvas_getRps() {
   }
 }
 
-int canvas_getCurrentCol(long frameTime, float rps) {
-  // Calculate which column to display depending on rps and current frame time
+int canvas_getCurrentCol(long frameTime, float w, int layer) {
+  // Calculate which column to display, for the given layer, depending on rps and current frame time
   float t = ((float) frameTime) / 1000000; // Uptime of the current frame in seconds
-  float w = rps * twoPi; // Angular frequency of the canvas
-  float x = y / tan(w * t + DISPLAY_ANGLE_LIMIT); // x position along the display surface. Angle is calculated in relation to the laser beam
-  x = -x + Dhalf; // Rescaling of x to 0 < x < D
+  float y = tan(w * t - DISPLAY_ANGLE_LIMIT[layer]) * DISPLAY_DIST_FROM_AXIS[layer]; // y position along the display volume
   for (int i = currentCol; i < DISPLAY_NR_COLS; i++) {
-    if ((x >= i * colWidth) && (x < (i + 1) * colWidth)) { // Find the segment of D in which x lies
+    if ((y >= i * colWidth) && (y < (i + 1) * colWidth)) { // Find the segment of D in which y lies
       return i;
     }
   }

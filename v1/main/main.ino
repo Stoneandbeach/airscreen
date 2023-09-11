@@ -57,10 +57,15 @@ displayState_t displayState = S_INIT;
 displayCommand_t displayCommand = NO_COMMAND;
 display_error_t display_error = DISPLAY_NO_ERROR;
 const int ONBOARD_LED_PIN = 13;
-const float DISPLAY_RADIUS = 75; // Radius of the swept volume in mm
-const float DISPLAY_ANGLE_LIMIT = M_PI / 4; // Outer angle limit of the display volume, from axis parallel to laser beams
 const int DISPLAY_NR_COLS = 16; // Number of columns in the display
-const float DISPLAY_DIST_FROM_AXIS = 40; // Distance from canvas axis to display surface in mm
+const int DISPLAY_NR_LAYERS = 5;
+const float DISPLAY_RADIUS = 75; // Radius of the swept volume in mm
+const float DISPLAY_MAX_ANGLE = M_PI / 4; // Outer angle limit of innermost display layer
+float DISPLAY_ANGLE_LIMIT[DISPLAY_NR_LAYERS] = {0., 0., 0., 0., 0.}; // Outer angle limit of the display layers, from axis tangential to laser beams
+const float DISPLAY_MIN_DIST_FROM_AXIS = 30; // Distance from canvas axis to innermost display layer in mm
+float DISPLAY_DIST_FROM_AXIS[DISPLAY_NR_LAYERS]; // Distance from canvas axis to display layers
+const float DISPLAY_DIST_BETWEEN_LAYERS = 7; // Inter-layer distance in mm
+const long DISPLAY_MAX_LAYER_TIME = 5000; // Light-time in microseconds for a layer before switching
 uint8_t frame[DISPLAY_NR_COLS]; // THIS NEEDS TO BE EXPANDED WHEN I HAVE MORE LASERS
 int frameNr = 0;
 int loadedFrameNr = 0;
@@ -68,7 +73,9 @@ long frameStartTime;
 long display_frameTime;
 long stateStartTime = 0;
 long display_stateTime;
-int prevCol = 0;
+long display_layerStartTime = 0;
+long display_layerTime = 0;
+int prevCol[DISPLAY_NR_LAYERS] = {0, 0, 0, 0, 0};
 uint8_t display_frameReadTimeout = 0;
 
 // Canvas declarations
@@ -97,17 +104,19 @@ canvas_error_t canvas_error = CANVAS_NO_ERROR;
 bool fatalError = 0;
 
 const float twoPi = 2 * M_PI;
-const float y = DISPLAY_RADIUS * sin(DISPLAY_ANGLE_LIMIT); // y position of the display surface
-const float D = 2 * DISPLAY_RADIUS * cos(DISPLAY_ANGLE_LIMIT); // The width of the display surface
-const float Dhalf = D / 2;
+const float Dhalf = DISPLAY_MIN_DIST_FROM_AXIS * tan(DISPLAY_MAX_ANGLE); // Half the width of the display volume
+const float D = Dhalf * 2;
 const int n = DISPLAY_NR_COLS + 1; //+ Number of display columns, plus one last, dark, padded columns
-const float colWidth = D / n; // The width of a column in the display surface
+const float colWidth = D / n; // The width of a column in the display volume
 int8_t currentCol = 0; // The currently active column
+int currentLayer = 0; // The currently active layer
 
 // Laser variables
-const int NR_LASERS = 5;
-const int LASER_PINS[NR_LASERS] = {3, 4, 5, 6, 8};
-int laser_states[NR_LASERS];
+const int LASER_NR_PINS = 6;
+const int LASER_PINS[LASER_NR_PINS] = {3, 4, 5, 6, 7, 8};
+int laser_states[LASER_NR_PINS];
+const int LASER_NR_TRANSISTOR_PINS = DISPLAY_NR_COLS;
+const int LASER_TRANSISTOR_PINS[LASER_NR_TRANSISTOR_PINS] = {17, 18, 19, 20, 21};
 
 // Display functions
 void setCommand(displayCommand_t command) {
@@ -144,9 +153,13 @@ void setup() {
   // Here I will later initialize pins for controlling fan speed, if required.
 
   // Laser
-  for (int i = 0; i < NR_LASERS; i++) {
+  for (int i = 0; i < LASER_NR_PINS; i++) {
     pinMode(LASER_PINS[i], OUTPUT);
     laser_states[i] = LOW;
+  }
+  for (int i = 0; i < LASER_NR_TRANSISTOR_PINS; i++) {
+    pinMode(LASER_TRANSISTOR_PINS[i], OUTPUT);
+    digitalWrite(LASER_TRANSISTOR_PINS[i], HIGH);
   }
 }
 
@@ -158,11 +171,20 @@ void loop() {
 
   long now = micros();
   display_stateTime = now - stateStartTime;
+
+  if (now - lastDebugTime > 1000000) {
+    debugPrint();
+    lastDebugTime = now;
+  }
   
   // Main state machine
   switch (displayState) {
     case S_INIT:
       // Possibility of doing startup checks, like measuring feedback from diodes if available
+      Serial.println("Initializing...");
+      canvas_initialize();
+      
+      Serial.println("Spinning up...");
       changeState(S_SPINUP);
       break;
     
@@ -198,15 +220,27 @@ void loop() {
     
     case S_ACTIVE:
       display_frameTime = now - frameStartTime;
-      currentCol = canvas_getCurrentCol(display_frameTime, canvas_rps);
+      display_layerTime = now - display_layerStartTime;
+      if (display_layerTime > DISPLAY_MAX_LAYER_TIME) {
+        currentLayer = (currentLayer + 1) % DISPLAY_NR_LAYERS;
+        laser_showLayer(currentLayer);
+        display_layerStartTime = now;
+      }
+      // Loop over all layers and do the following. Probably need a prevCol array?
+      float canvas_angularFrequency = canvas_rps * twoPi; // Angular frequency of the canvas
+      currentCol = canvas_getCurrentCol(display_frameTime, canvas_angularFrequency, currentLayer);
 
       if (currentCol == -1) {
-        setCommand(GO_DARK);
-        prevCol = -1;
+        prevCol[currentLayer] = -1;
       }
-      if (currentCol > prevCol) {
-        laser_showCol(currentCol);
-        prevCol = currentCol;
+      if (currentCol > prevCol[currentLayer]) {
+        laser_showCol(currentCol, currentLayer);
+        prevCol[currentLayer] = currentCol;
+      }
+      
+      // Check if the innermost layer is in a padded column. If so, this display period ends.
+      if (prevCol[DISPLAY_NR_LAYERS - 1] = -1) {
+        setCommand(GO_DARK);
       }
       break;
     
@@ -230,7 +264,9 @@ void loop() {
         }
       } else {
         frameNr++;
-        laser_showCol(-1);
+        for (int layer = 0; layer < DISPLAY_NR_LAYERS; layer++) {
+          laser_showCol(-1, layer);
+        }
         changeState(S_DARK);
         setCommand(NO_COMMAND);
         debugLed(0);
@@ -245,6 +281,8 @@ void loop() {
         changeState(S_ACTIVE);
         setCommand(NO_COMMAND);
         frameStartTime = now; // TODO: Change this so that frameStartTime = the latest canvas_highTime, since that gives the best reference for how long I've got before the active state should end.
+        display_layerStartTime = now;
+        currentLayer = 0;
         debugLed(1);
       }
       break;

@@ -26,7 +26,9 @@ long debugTimeThen = 0;
 void debugLasers() {
   debugTimeNow = micros() - canvas_highTimes[canvas_signalHighCount % canvas_averageRpsOverCounts];
   Serial.println(debugTimeNow);
-  int col = canvas_getCurrentCol(debugTimeNow, canvas_rps);
+  int layer = 0;
+  float canvas_angularFrequency = canvas_rps * twoPi;
+  int col = canvas_getCurrentCol(debugTimeNow, canvas_angularFrequency, layer);
   int debugLaserState = col % 2;
   laser_setState(0, debugLaserState);
 }
