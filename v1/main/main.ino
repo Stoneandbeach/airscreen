@@ -96,6 +96,14 @@ canvas_error_t canvas_error = CANVAS_NO_ERROR;
 
 bool fatalError = 0;
 
+const float twoPi = 2 * M_PI;
+const float y = DISPLAY_RADIUS * sin(DISPLAY_ANGLE_LIMIT); // y position of the display surface
+const float D = 2 * DISPLAY_RADIUS * cos(DISPLAY_ANGLE_LIMIT); // The width of the display surface
+const float Dhalf = D / 2;
+const int n = DISPLAY_NR_COLS + 1; //+ Number of display columns, plus one last, dark, padded columns
+const float colWidth = D / n; // The width of a column in the display surface
+int8_t currentCol = 0; // The currently active column
+
 // Laser variables
 const int NR_LASERS = 5;
 const int LASER_PINS[NR_LASERS] = {3, 4, 5, 6, 8};
@@ -114,270 +122,6 @@ void changeState(displayState_t state) {
   }
   display_stateTime = 0;
   stateStartTime = micros();
-}
-
-uint8_t columnIdx = 0;
-
-void display_loadFrame(uint8_t *frameArray, int nr) {
-  if (nr == -1) {
-    display_loadDefaultFrame(frameArray, nr);
-  } else {
-    //long darkTime = canvas_highTimes[canvas_signalHighCount % canvas_averageRpsOverCounts] - canvas_lowTimes[canvas_signalLowCount % canvas_averageRpsOverCounts];
-    float spr = 1 / canvas_rps;
-    float upr = 1000000 * spr;
-    float darkTime = upr / 4; // Microseconds per quarter revolution, i.e., how long the downtime between two ACTIVE periods is.
-    if (darkTime < 0) { // This is to make sure darkTime is always positive regardless of when it is calculated. TODO: Check if this is necessary.
-      darkTime *= -1;
-    }
-    if (!display_frameReadTimeout) {
-      columnIdx = 0;
-    }
-    //while ((display_frameTime < 0.8 * darkTime) && (columnIdx < DISPLAY_NR_COLS)) {
-    while (display_stateTime < 0.8 * darkTime) {
-      if (Serial.available()) {
-        frameArray[columnIdx] = Serial.read();
-        columnIdx++;
-      }
-      if (columnIdx == DISPLAY_NR_COLS) {
-        darkTime = 0;
-      }
-    }
-    if (columnIdx == DISPLAY_NR_COLS) {
-      display_send(COM_FRAME_RECEIVED);
-      display_frameReadTimeout = 0;
-      //debugLed(0);
-    } else {
-      display_setError(DISPLAY_FRAME_READ_TIMEOUT);
-      display_frameReadTimeout = 1;
-      // TODO: Send a timeout message.
-      // TODO: Also, make sure that the COMS don't break here, since COM_FRAME_RECEIVED won't be sent.
-    }
-  }
-  Serial.write(columnIdx);
-}
-
-void display_loadDefaultFrame(uint8_t *frameArray, int nr) {
-  uint8_t columns[11];
-  if ((nr / 10) % 2 == 0) {
-    uint8_t temp[11] = {0b00011111,
-                           0b00000100,
-                           0b00011111,
-                           0b00000000,
-                           0b00011111,
-                           0b00010101,
-                           0b00010101,
-                           0b00000000,
-                           0b00001001,
-                           0b00010001,
-                           0b00001111};
-    for (int i = 0; i < 11; i++) {
-      columns[i] = temp[i];
-    }
-  } else {
-    uint8_t temp[11] = {0b00010101,
-                           0b00001010,
-                           0b00010101,
-                           0b00001010,
-                           0b00000000,
-                           0b00000000,
-                           0b00000000,
-                           0b00000000,
-                           0b00010101,
-                           0b00001010,
-                           0b00010101};
-    for (int i = 0; i < 11; i++) {
-      columns[i] = temp[i];
-    }
-  }
-  for (int i = 0; i < DISPLAY_NR_COLS; i++) {
-    if (i < 11) {
-      frameArray[i] = columns[i];
-    } else {
-      frameArray[i] = 0b00000000;
-    }
-  }
-}
-
-void display_send(int cmd) {
-  Serial.write(cmd);
-//  debugScreen(cmd, 2);
-}
-
-void display_processComs() {
-    
-  if (Serial.available()) {
-    //debugLed(1);
-    if (display_frameReadTimeout) {
-      display_loadFrame(frame, frameNr);
-    } else {
-      int coms = Serial.read();
-//      debugScreen(coms, 1);
-      switch (coms) {
-        case COM_FRAME_AVAILABLE:
-            display_send(COM_REQUEST_FRAME);
-            display_loadFrame(frame, frameNr);
-            if (!display_frameReadTimeout) { // TODO: The frame-counting logic is currently broken and also does nothing.
-              loadedFrameNr = frameNr;
-            }
-          break;
-        default:
-          display_setError(DISPLAY_UNKNOWN_COMS);
-      }
-    }
-  }
-}
-
-void display_setError(int error) {
-  display_error = error;
-//  debugScreen(error, 3);
-}
-
-// Canvas functions
-void canvas_setError(canvas_error_t error) {
-  canvas_error = error;
-  switch (canvas_error) {
-    case CANVAS_NO_SIGNAL:
-      fatalError = 1;
-      setCommand(STOP);
-  }
-}
-
-float canvas_getRps() {
-  if (canvas_signalCount > canvas_prevRpsSignalCount) {
-    float nrRevs = ((float) canvas_averageRpsOverCounts - 1) / 2; // The number of revolutions between the two times being compared
-    // Calculate delta-time between the latest and oldest recorded high signal times in the canvas_highTimes array.
-    float highRps = (canvas_highTimes[canvas_signalHighCount % canvas_averageRpsOverCounts] - canvas_highTimes[(canvas_signalHighCount + 1) % canvas_averageRpsOverCounts]);
-    if (highRps == 0) {
-      return 0;
-    }
-    highRps = 1000000 * nrRevs / highRps;
-    float lowRps = (canvas_lowTimes[canvas_signalLowCount % canvas_averageRpsOverCounts] - canvas_lowTimes[(canvas_signalLowCount + 1) % canvas_averageRpsOverCounts]);
-    lowRps = 1000000 * nrRevs / lowRps;
-    float rps = (highRps + lowRps) / 2;
-    canvas_prevRpsSignalCount = canvas_signalCount;
-    return rps;
-  } else {
-    return canvas_rps; // Rps has not updated since last polling, because we have gotten no new signals from the canvas
-  }
-}
-
-const float twoPi = 2 * M_PI;
-const float y = DISPLAY_RADIUS * sin(DISPLAY_ANGLE_LIMIT); // y position of the display surface
-const float D = 2 * DISPLAY_RADIUS * cos(DISPLAY_ANGLE_LIMIT); // The width of the display surface
-const float Dhalf = D / 2;
-const int n = DISPLAY_NR_COLS + 1; //+ Number of display columns, plus one last, dark, padded columns
-const float colWidth = D / n; // The width of a column in the display surface
-int8_t currentCol = 0; // The currently active column
-
-int canvas_getCurrentCol(long frameTime, float rps) {
-  // Calculate which column to display depending on rps and current frame time
-  float t = ((float) frameTime) / 1000000; // Uptime of the current frame in seconds
-  float w = rps * twoPi; // Angular frequency of the canvas
-  float x = y / tan(w * t + DISPLAY_ANGLE_LIMIT); // x position along the display surface. Angle is calculated in relation to the laser beam
-  x = -x + Dhalf; // Rescaling of x to 0 < x < D
-  for (int i = currentCol; i < DISPLAY_NR_COLS; i++) {
-    if ((x >= i * colWidth) && (x < (i + 1) * colWidth)) { // Find the segment of D in which x lies
-      return i;
-    }
-  }
-  return -1; // We are in a dark, padded column
-}
-
-// Laser functions
-void laser_setState(int laserIdx, int state) {
-  laser_states[laserIdx] = state;
-  digitalWrite(LASER_PINS[laserIdx], state);
-}
-
-int laser_getState(int laserIdx) { // This may never be needed.
-  return laser_states[laserIdx];
-}
-
-void laser_showCol(int currentCol) {
-  if (currentCol == -1) {
-    for (int i = 0; i < NR_LASERS; i++) {
-      laser_setState(i, LOW);
-    }
-  } else {
-    uint8_t column = frame[currentCol];
-    uint8_t bitMask = 0b00000001; // THIS IS GOING TO BREAK IF THERE ARE MORE THAN 8 LASERS OR SOMETHING
-    for (int i = 0; i < NR_LASERS; i++) {
-      uint8_t state = (column & (bitMask << i)) >> i;
-      laser_setState(i, state);
-    }
-  }
-}
-
-// Debugging
-
-void debugPrint() {
-  String debugStrings[] = {"displayState", "displayCommand", "signalState", "canvas_error", "frameNr", "loadedFrameNr"};
-  int debugInts[] = {displayState, displayCommand, canvas_signalState, canvas_error, frameNr, loadedFrameNr};
-  for (int i = 0; i < 6; i++) {
-    Serial.print(debugStrings[i]);
-    Serial.print(": ");
-    Serial.print(debugInts[i]);
-    Serial.print(" - ");
-  }
-  Serial.println();
-}
-
-void debugPrintTiming(int currentCol) {
-  Serial.print(currentCol);
-  Serial.print(",");
-  Serial.print(canvas_signalState);
-  Serial.print(",");
-  Serial.println(displayState);
-}
-
-long debugTimeNow = 0;
-long debugTimeThen = 0;
-
-void debugLasers() {
-  debugTimeNow = micros() - canvas_highTimes[canvas_signalHighCount % canvas_averageRpsOverCounts];
-  Serial.println(debugTimeNow);
-  int col = canvas_getCurrentCol(debugTimeNow, canvas_rps);
-  int debugLaserState = col % 2;
-  laser_setState(0, debugLaserState);
-}
-
-void debugLed(int state) {
-  digitalWrite(ONBOARD_LED_PIN, state);
-}
-
-int debugScreenArray[] = {0, 0, 0}; // TODO: Make this a char array if that is possible
-
-/*
-// Print last sent message, last received message and last error on OLED screen
-void debugScreen(int msg, int row) {
-  return;
-  debugScreenArray[row - 1] = msg;
-  if (row == 3) {
-    char msgStr[3];
-    int cond1;
-    u8g2.clearBuffer();
-    for (int i = 0; i < 3; i++) {
-      cond1 = debugScreenArray[i];
-      itoa(cond1, msgStr, 10);
-      int ypos = 15 * (i + 1);
-      u8g2.drawStr(0, ypos, msgStr);  
-    }
-    u8g2.sendBuffer();
-  }
-}
-*/
-
-// Interrupts
-void canvas_signalInterrupt() {
-  canvas_signalCount++;
-  canvas_signalState = digitalRead(CANVAS_SIGNAL_PIN);
-  if (canvas_signalState) {
-    canvas_signalHighCount++;
-    canvas_highTimes[canvas_signalHighCount % canvas_averageRpsOverCounts] = micros();
-  } else {
-    canvas_signalLowCount++;
-    canvas_lowTimes[canvas_signalLowCount % canvas_averageRpsOverCounts] = micros();
-  }
 }
 
 // Setup and main loop
@@ -491,7 +235,8 @@ void loop() {
         setCommand(NO_COMMAND);
         debugLed(0);
         canvas_rps = canvas_getRps();
-        display_processComs(); // Read incoming serial coms and react accordingly
+        display_loadDefaultFrame(frame, frameNr);
+        //display_processComs(); // Read incoming serial coms and react accordingly
       }
       break;
     
