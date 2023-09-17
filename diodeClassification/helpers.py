@@ -15,12 +15,12 @@ class Spot():
         x = self.x + other.x
         y = self.y + other.y
         offset = np.sqrt(x**2 + y**2)
-        print(x, offset, np.arccos(x / offset))
         angle = np.arccos(x / offset) * 360 / (2 * np.pi) * (-1 if y < 0 else 1)
-        print(f"New spot: {angle:.2f} {offset:.2f} {x:.2f} {y:.2f}")
         spot = Spot(angle, offset)
-        print(spot)
         return spot
+    
+    def getAngleRads(self):
+        return self.angle * 2 * np.pi / 360
 
 def calculateScore(spots):
     angleScore = 0
@@ -32,15 +32,18 @@ def calculateScore(spots):
     totalScore = np.sqrt(totalScore)
     return totalScore
 
-def plotSpots(spots, color=None, fig=None):
+def plotSpots(spots, color=None, fig=None, label=None):
     if not fig:
         fig = plt.figure()
     plt.plot(0, 0, "o", color="k", figure=fig)
+    kwargs = {}
+    kwargs["figure"] = fig
+    if color:
+        kwargs["color"] = color
+    if label:
+        kwargs["label"] = label
     for spot in spots:
-        if color:
-            plt.plot(spot.x, spot.y, 'x', color=color, figure=fig)
-        else:
-            plt.plot(spot.x, spot.y, 'x', figure=fig)
+            plt.plot(spot.x, spot.y, '.', **kwargs)
 
 def loadSpotsFromFile(filename):
     with open(filename, "r") as f:

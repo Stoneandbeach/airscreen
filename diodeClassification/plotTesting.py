@@ -14,8 +14,23 @@ for diode, hole in zip(diodes, holes):
     #print(diode, hole, spot)
     spots.append(spot)
 
+trimmedSpots = []
+rotatedDiodes = []
+for diode, hole in zip(diodes, holes):
+    angle = np.arcsin(-(hole.offset*np.sin(hole.getAngleRads())) / diode.offset) * 360 / (2 * np.pi)
+    rotatedDiode = Spot(angle, diode.offset)
+    print(rotatedDiode)
+    print(diode)
+    print(hole)
+    print()
+    trimmedSpot = rotatedDiode + hole
+    trimmedSpots.append(trimmedSpot)
+    rotatedDiodes.append(rotatedDiode)
+
 fig = plt.figure()
-plotSpots(measurement, color="k", fig=fig)
-plotSpots(spots, color="blue", fig=fig)
+plotSpots(measurement, color="k", fig=fig, label="Measurement")
+#plotSpots(spots, color="yellow", fig=fig, label="Diodes + sorted holes")
+plotSpots(trimmedSpots, color="red", fig=fig, label="Trimmed combo")
+plotSpots(rotatedDiodes, color="blue", fig=fig, label="Rotated diodes")
 
 plt.show()
