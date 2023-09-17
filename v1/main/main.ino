@@ -65,7 +65,7 @@ float DISPLAY_ANGLE_LIMIT[DISPLAY_NR_LAYERS] = {0., 0., 0., 0., 0.}; // Outer an
 const float DISPLAY_MIN_DIST_FROM_AXIS = 30; // Distance from canvas axis to innermost display layer in mm
 float DISPLAY_DIST_FROM_AXIS[DISPLAY_NR_LAYERS]; // Distance from canvas axis to display layers
 const float DISPLAY_DIST_BETWEEN_LAYERS = 7; // Inter-layer distance in mm
-const long DISPLAY_MAX_LAYER_TIME = 5000; // Light-time in microseconds for a layer before switching
+const long DISPLAY_MAX_LAYER_TIME = 600; // Light-time in microseconds for a layer before switching
 uint8_t frame[DISPLAY_NR_COLS]; // THIS NEEDS TO BE EXPANDED WHEN I HAVE MORE LASERS
 int frameNr = 0;
 int loadedFrameNr = 0;
@@ -173,7 +173,7 @@ void loop() {
   display_stateTime = now - stateStartTime;
 
   if (now - lastDebugTime > 1000000) {
-    debugPrint();
+    //debugPrint();
     lastDebugTime = now;
   }
   
@@ -181,10 +181,10 @@ void loop() {
   switch (displayState) {
     case S_INIT:
       // Possibility of doing startup checks, like measuring feedback from diodes if available
-      Serial.println("Initializing...");
+      //Serial.println("Initializing...");
       canvas_initialize();
       
-      Serial.println("Spinning up...");
+      //Serial.println("Spinning up...");
       changeState(S_SPINUP);
       break;
     
@@ -200,7 +200,7 @@ void loop() {
             }
             if (steadyRpsCount >= steadyRpsCountTarget) {
               changeState(S_READY);
-              display_send(COM_READY);
+              //display_send(COM_READY);
             }
          }
          deltaRps = canvas_rps - prevRps;
@@ -230,6 +230,10 @@ void loop() {
       float canvas_angularFrequency = canvas_rps * twoPi; // Angular frequency of the canvas
       currentCol = canvas_getCurrentCol(display_frameTime, canvas_angularFrequency, currentLayer);
 
+      //Serial.print(currentLayer);
+      //Serial.print(", ");
+      //Serial.println(currentCol);
+
       if (currentCol == -1) {
         prevCol[currentLayer] = -1;
       }
@@ -239,7 +243,7 @@ void loop() {
       }
       
       // Check if the innermost layer is in a padded column. If so, this display period ends.
-      if (prevCol[DISPLAY_NR_LAYERS - 1] = -1) {
+      if (prevCol[DISPLAY_NR_LAYERS - 1] == -1) {
         setCommand(GO_DARK);
       }
       break;
@@ -249,7 +253,7 @@ void loop() {
   }
 
   //debugPrint();
-  //debugPrintTiming(currentCol);
+  debugPrintTiming(currentCol);
   
   // Main command switch
   switch (displayCommand) {
@@ -283,6 +287,9 @@ void loop() {
         frameStartTime = now; // TODO: Change this so that frameStartTime = the latest canvas_highTime, since that gives the best reference for how long I've got before the active state should end.
         display_layerStartTime = now;
         currentLayer = 0;
+        for (int layer = 0; layer < DISPLAY_NR_LAYERS; layer++) {
+          prevCol[layer] = 0;
+        }
         debugLed(1);
       }
       break;

@@ -24,7 +24,9 @@ void loop() {
     rps = stateChangeCount / (dt / 1000.0);
     stateChangeCount = 0;
     lastTime = millis();
-    Serial.println(rps);
+    Serial.print(rps);
+    Serial.print(" ");
+    Serial.println(fanSignal);
   }
   //Serial.println(fanSignal);
 }

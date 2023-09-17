@@ -15,6 +15,8 @@ void debugPrint() {
 void debugPrintTiming(int currentCol) {
   Serial.print(currentCol);
   Serial.print(",");
+  Serial.print(currentLayer);
+  Serial.print(",");
   Serial.print(canvas_signalState);
   Serial.print(",");
   Serial.println(displayState);

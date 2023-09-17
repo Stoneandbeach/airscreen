@@ -40,18 +40,19 @@ void display_loadFrame(uint8_t *frameArray, int nr) {
 
 void display_loadDefaultFrame(uint8_t *frameArray, int nr) {
   uint8_t columns[11];
-  if ((nr / 10) % 2 == 0) {
+  //if ((nr / 10) % 2 == 0) {
+  if (true) {
     uint8_t temp[11] = {0b00011111,
-                           0b00000100,
-                           0b00011111,
-                           0b00000000,
-                           0b00011111,
-                           0b00010101,
-                           0b00010101,
-                           0b00000000,
-                           0b00001001,
-                           0b00010001,
-                           0b00001111};
+                        0b00010001,
+                        0b00010001,
+                        0b00010001,
+                        0b00010001,
+                        0b00010001,
+                        0b00010001,
+                        0b00010001,
+                        0b00010001,
+                        0b00010001,
+                        0b00011111};
     for (int i = 0; i < 11; i++) {
       columns[i] = temp[i];
     }
