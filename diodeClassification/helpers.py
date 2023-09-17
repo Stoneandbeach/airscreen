@@ -2,11 +2,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 class Spot():
-    def __init__(self, angle=0., offset=0.):
+    def __init__(self, angle=0., offset=0., id=None):
         self.angle = angle
         self.offset = offset
         self.x = offset * np.cos(angle*2*np.pi/360)
         self.y = offset * np.sin(angle*2*np.pi/360)
+        self.id = id
     
     def __str__(self):
         return str(self.angle) + ", " + str(self.offset) + ", " + str(self.x) + ", " + str(self.y)
@@ -55,5 +56,8 @@ def loadSpotsFromFile(filename):
         angle = float(parts[0])
         offset = float(parts[1].strip("\n"))
         spot = Spot(angle, offset)
+        if len(parts) > 2:
+            id = parts[2].strip("\n")
+            spot.id = id
         spots.append(spot)
     return spots
