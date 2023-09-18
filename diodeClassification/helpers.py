@@ -33,18 +33,27 @@ def calculateScore(spots):
     totalScore = np.sqrt(totalScore)
     return totalScore
 
-def plotSpots(spots, color=None, fig=None, label=None):
+def plotSpots(spots, color=None, fig=None, label=None, basePositions=None):
     if not fig:
         fig = plt.figure()
-    plt.plot(0, 0, "o", color="k", figure=fig)
+    plt.scatter(0, 0, marker="o", figure=fig, facecolor="none", edgecolor="k")
     kwargs = {}
     kwargs["figure"] = fig
     if color:
         kwargs["color"] = color
     if label:
         kwargs["label"] = label
-    for spot in spots:
-            plt.plot(spot.x, spot.y, '.', **kwargs)
+    for s, spot in enumerate(spots):
+        x = spot.x
+        y = spot.y
+        if basePositions:
+            x *= 20
+            y *= 20
+            x += basePositions[s][0]
+            y += basePositions[s][1]
+            marker = ["o", "x", "p", "v", "s", "^"][basePositions[s][0] // 7]
+            kwargs["marker"] = marker
+        plt.plot(x, y, '.', **kwargs)
 
 def loadSpotsFromFile(filename):
     with open(filename, "r") as f:
