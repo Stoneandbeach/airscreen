@@ -26,10 +26,20 @@ class Spot():
 def calculateScore(spots):
     angleScore = 0
     offsetScore = 0
+    columnScore = 0
+    for column in range(5):
+        columnSpots = spots[column : column+6]
+        columnMean = np.mean([spot.offset for spot in columnSpots])
+        columnOffsetRMS = 0
+        for spot in columnSpots:
+            columnOffsetRMS += (spot.offset - columnMean)**2
+        columnScore += columnOffsetRMS
+
     for spot in spots:
-        angleScore += spot.angle**2
+        angleScore += (spot.angle / 360)**2
         offsetScore += spot.offset**2
-    totalScore = angleScore + offsetScore
+    
+    totalScore = columnOffsetRMS
     totalScore = np.sqrt(totalScore)
     return totalScore
 
@@ -53,7 +63,7 @@ def plotSpots(spots, color=None, fig=None, label=None, basePositions=None):
             y += basePositions[s][1]
             marker = ["o", "x", "p", "v", "s", "^"][basePositions[s][0] // 7]
             kwargs["marker"] = marker
-        plt.plot(x, y, '.', **kwargs)
+        plt.plot(x, y, **kwargs)
 
 def loadSpotsFromFile(filename):
     with open(filename, "r") as f:
