@@ -26,12 +26,18 @@ for i in range(10000):
     spots = []
     positions = []
     for diode, hole in zip(diodes, holes):
-        spot = diode + hole
+        ratio = (hole.offset*np.sin(hole.getAngleRads())) / diode.offset
+        if ratio**2 < 1:
+            angle = np.arcsin(-ratio) * 360 / (2 * np.pi)
+        else:
+            angle = (hole.angle + 180) % 360
+        rotatedDiode = Spot(angle, diode.offset, id=diode.id)
+        spot = rotatedDiode + hole
         spots.append(spot)
         positions.append(positionDict[hole.id])
     score = calculateScore(spots)
     if score < lowScore:
-        print(score)
+        print("Low score:", score)
         lowScore = score
         bestOrder = order
     random.shuffle(order)
@@ -41,7 +47,14 @@ holes = [hole for hole, _ in sorted(zip(holes, order), key=lambda x : x[1])]
 spots = []
 positions = []
 for diode, hole in zip(diodes, holes):
-    spot = diode + hole
+    ratio = (hole.offset*np.sin(hole.getAngleRads())) / diode.offset
+    if ratio**2 < 1:
+        angle = np.arcsin(-ratio) * 360 / (2 * np.pi)
+    else:
+        angle = (hole.angle + 180) % 360
+    rotatedDiode = Spot(angle, diode.offset, id=diode.id)
+    spot = rotatedDiode + hole
+    spot.id = hole.id
     spots.append(spot)
     positions.append(positionDict[hole.id])
 plotSpots(spots, basePositions=positions, color="k")

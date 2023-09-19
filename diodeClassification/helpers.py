@@ -16,12 +16,19 @@ class Spot():
         x = self.x + other.x
         y = self.y + other.y
         offset = np.sqrt(x**2 + y**2)
-        angle = np.arccos(x / offset) * 360 / (2 * np.pi) * (-1 if y < 0 else 1)
+        ratio = x / offset
+        angle = np.arccos(ratio) * 360 / (2 * np.pi) * (-1 if y < 0 else 1)
         spot = Spot(angle, offset)
         return spot
     
     def getAngleRads(self):
         return self.angle * 2 * np.pi / 360
+
+def calculateColumnOffsetScoreForOne(columnSpots, index):
+    spot = columnSpots[index]
+    columnMean = np.mean([spot.offset for spot in columnSpots])
+    columnOffsetScore = np.sqrt((spot.offset - columnMean)**2)
+    return columnOffsetScore
 
 def calculateScore(spots):
     angleScore = 0
