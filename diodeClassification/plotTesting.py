@@ -14,6 +14,7 @@ for hole in holes:
     position = (column * 7, row * 7)
     positions1.append(position)
 
+unsortedHoles = holes.copy()
 holes.sort(key=lambda x : x.offset)
 
 spots = []
@@ -46,8 +47,9 @@ for diode, hole in zip(diodes, holes):
 fig = plt.figure()
 plotSpots(measurement, color="k", fig=fig, label="Measurement", basePositions=positions1)
 #plotSpots(spots, color="yellow", fig=fig, label="Diodes + sorted holes")
-plotSpots(trimmedSpots, color="red", fig=fig, label="Trimmed combo", basePositions=positions2)
+#plotSpots(trimmedSpots, color="red", fig=fig, label="Trimmed combo", basePositions=positions2)
 #plotSpots(rotatedDiodes, color="blue", fig=fig, label="Rotated diodes")
+#plotSpots(unsortedHoles, color="slategrey", fig=fig, label="Holes", basePositions=positions1)
 
 plt.show()
 

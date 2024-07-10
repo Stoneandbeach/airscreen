@@ -60,9 +60,15 @@ def plotSpots(spots, color=None, fig=None, label=None, basePositions=None):
         kwargs["color"] = color
     if label:
         kwargs["label"] = label
+    xs = []
+    ys = []
     for s, spot in enumerate(spots):
+        print(s)
+        if s % 6 == 0:
+            xs = []
+            ys = []
         x = spot.x
-        y = spot.y
+        y = spot.y        
         if basePositions:
             x *= 20
             y *= 20
@@ -70,7 +76,10 @@ def plotSpots(spots, color=None, fig=None, label=None, basePositions=None):
             y += basePositions[s][1]
             marker = ["o", "x", "p", "v", "s", "^"][basePositions[s][0] // 7]
             kwargs["marker"] = marker
-        plt.plot(x, y, **kwargs)
+            kwargs["linestyle"] = ""
+            plt.plot(x, y, **kwargs)
+        xs.append(x)
+        ys.append(y)
 
 def loadSpotsFromFile(filename):
     with open(filename, "r") as f:
