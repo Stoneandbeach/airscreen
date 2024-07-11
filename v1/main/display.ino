@@ -57,27 +57,23 @@ void display_loadDefaultFrame(uint8_t *frameArray, int nr) {
       columns[i] = temp[i];
     }
   } else {
-    uint8_t temp[11] = {0b00010001,
+    uint8_t temp[11] = {0b00111111,
+                        0b00111111,
+                        0b00111111,
+                        0b00111111,
+                        0b00111111,
                         0b00000000,
                         0b00000000,
-                        0b00010001,
-                        0b00000001,
                         0b00000000,
                         0b00000000,
-                        0b00010001,
                         0b00000000,
-                        0b00000000,
-                        0b00010001};
-    for (int i = 0; i < 11; i++) {
+                        0b00000000};
+    for (int i = 0; i < DISPLAY_NR_COLS; i++) {
       columns[i] = temp[i];
     }
   }
   for (int i = 0; i < DISPLAY_NR_COLS; i++) {
-    if (i < 11) {
-      frameArray[i] = columns[i];
-    } else {
-      frameArray[i] = 0b00000000;
-    }
+    frameArray[i] = columns[i];
   }
 }
 

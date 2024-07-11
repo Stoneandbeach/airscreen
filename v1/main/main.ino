@@ -57,16 +57,16 @@ displayState_t displayState = S_INIT;
 displayCommand_t displayCommand = NO_COMMAND;
 display_error_t display_error = DISPLAY_NO_ERROR;
 const int ONBOARD_LED_PIN = 13;
-const int DISPLAY_NR_COLS = 11; // Number of columns in the display
-const int DISPLAY_NR_LAYERS = 5;
+const int DISPLAY_NR_COLS = 4; // Number of columns in the display
+const int DISPLAY_NR_LAYERS = 2;
 const float DISPLAY_RADIUS = 75; // Radius of the swept volume in mm
 const float DISPLAY_MAX_ANGLE = M_PI / 4; // Outer angle limit of innermost display layer
-float DISPLAY_ANGLE_LIMIT[DISPLAY_NR_LAYERS] = {0., 0., 0., 0., 0.}; // Outer angle limit of the display layers, from axis tangential to laser beams
+float DISPLAY_ANGLE_LIMIT[DISPLAY_NR_LAYERS]; // Outer angle limit of the display layers, from axis tangential to laser beams
 const float DISPLAY_MIN_DIST_FROM_AXIS = 30; // Distance from canvas axis to innermost display layer in mm
 float DISPLAY_DIST_FROM_AXIS[DISPLAY_NR_LAYERS]; // Distance from canvas axis to display layers
 const float DISPLAY_DIST_BETWEEN_LAYERS = 7; // Inter-layer distance in mm
-const long DISPLAY_MAX_LAYER_TIME = 600; // Light-time in microseconds for a layer before switching
-uint8_t frame[DISPLAY_NR_COLS]; // THIS NEEDS TO BE EXPANDED WHEN I HAVE MORE LASERS
+const long DISPLAY_MAX_LAYER_TIME = 1000; // Light-time in microseconds for a layer before switching
+uint8_t frame[DISPLAY_NR_COLS]; // THIS NEEDS TO BE EXPANDED BEYOND 8 BIT WHEN I HAVE MORE LASERS
 int frameNr = 0;
 int loadedFrameNr = 0;
 long frameStartTime;
@@ -75,7 +75,7 @@ long stateStartTime = 0;
 long display_stateTime;
 long display_layerStartTime = 0;
 long display_layerTime = 0;
-int prevCol[DISPLAY_NR_LAYERS] = {0, 0, 0, 0, 0};
+int prevCol[DISPLAY_NR_LAYERS];
 uint8_t display_frameReadTimeout = 0;
 
 // Canvas declarations
@@ -115,8 +115,9 @@ int currentLayer = 0; // The currently active layer
 const int LASER_NR_PINS = 6;
 const int LASER_PINS[LASER_NR_PINS] = {3, 4, 5, 6, 7, 8};
 int laser_states[LASER_NR_PINS];
-const int LASER_NR_TRANSISTOR_PINS = DISPLAY_NR_COLS;
-const int LASER_TRANSISTOR_PINS[LASER_NR_TRANSISTOR_PINS] = {17, 18, 19, 20, 21};
+const int LASER_NR_TRANSISTOR_PINS = DISPLAY_NR_LAYERS;
+const int LASER_BASE_TRANSISTOR_PINS[5] = {17, 18, 19, 20, 21};
+int LASER_TRANSISTOR_PINS[LASER_NR_TRANSISTOR_PINS];
 
 // Display functions
 void setCommand(displayCommand_t command) {
@@ -145,6 +146,10 @@ void setup() {
 */
   
   // Display
+  for (int i = 0; i < DISPLAY_NR_LAYERS; i++) {
+    prevCol[i] = 0;
+  }
+
   pinMode(ONBOARD_LED_PIN, OUTPUT);
   
   // Canvas
@@ -153,6 +158,9 @@ void setup() {
   // Here I will later initialize pins for controlling fan speed, if required.
 
   // Laser
+  for (int i = 0; i < DISPLAY_NR_LAYERS; i++) {
+    LASER_TRANSISTOR_PINS[i] = LASER_BASE_TRANSISTOR_PINS[i];
+  }
   for (int i = 0; i < LASER_NR_PINS; i++) {
     pinMode(LASER_PINS[i], OUTPUT);
     laser_states[i] = LOW;
