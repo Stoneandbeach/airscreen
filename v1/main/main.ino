@@ -1,5 +1,6 @@
 #include <math.h>
 #include <Arduino.h>
+#include "SPI.h"
 /*#include <U8g2lib.h>
 
 #ifdef U8X8_HAVE_HW_SPI
@@ -13,6 +14,16 @@
 
 // Initialize high speed I2C for OLED screen
 //U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);
+
+#define IODIRA 0x00  //direction register for PORTA
+#define IODIRB 0x01 //direction register for PORTB
+
+#define GPIOA 0x12   //status register for PORTA
+#define GPIOB 0x13  //status register for PORTB
+
+#define CS1 10  // chip select pins for i/o expander SPI coms
+#define CS2 9
+#define CS3 8
 
 enum displayState_t {
   S_INIT = 0,
@@ -52,11 +63,20 @@ enum com_outg_msg_t {
   COM_FRAME_RECEIVED = 0b01000010
 };
 
+// A layer_t struct contains info for communication with (up to) eight pins in one "port" (A or B) of an i/o expander
+typedef struct layer {
+  int cs_pin;
+  int gpio_addr;
+  int num_leds;
+  int bit_0_pin;
+  int order;
+} layer_t;
+
 // Display (i.e., overall) declarations
 displayState_t displayState = S_INIT;
 displayCommand_t displayCommand = NO_COMMAND;
 display_error_t display_error = DISPLAY_NO_ERROR;
-const int ONBOARD_LED_PIN = 13;
+const int HEARTBEAT_LED_PIN = 3;
 const int DISPLAY_NR_COLS = 4; // Number of columns in the display
 const int DISPLAY_NR_LAYERS = 2;
 const float DISPLAY_RADIUS = 75; // Radius of the swept volume in mm
@@ -118,6 +138,7 @@ int laser_states[LASER_NR_PINS];
 const int LASER_NR_TRANSISTOR_PINS = DISPLAY_NR_LAYERS;
 const int LASER_BASE_TRANSISTOR_PINS[5] = {17, 18, 19, 20, 21};
 int LASER_TRANSISTOR_PINS[LASER_NR_TRANSISTOR_PINS];
+layer_t layers[DISPLAY_NR_LAYERS];
 
 // Display functions
 void setCommand(displayCommand_t command) {
@@ -138,6 +159,19 @@ void changeState(displayState_t state) {
 void setup() {
   Serial.begin(115200);
 
+  //SPI
+  pinMode(CS1, OUTPUT);
+  digitalWrite(CS1, HIGH);
+  pinMode(CS2, OUTPUT);
+  digitalWrite(CS2, HIGH);
+  pinMode(CS3, OUTPUT);
+  digitalWrite(CS3, HIGH);
+  
+  const long speedMaximum = 10000000;
+  SPISettings settings(speedMaximum, MSBFIRST, SPI_MODE0);
+  SPI.begin();
+  SPI.beginTransaction(settings);
+
 /*
   u8g2.begin();
   //u8g2.setFont(u8g2_font_ncenB18_tf);
@@ -150,26 +184,25 @@ void setup() {
     prevCol[i] = 0;
   }
 
-  pinMode(ONBOARD_LED_PIN, OUTPUT);
+  pinMode(HEARTBEAT_LED_PIN, OUTPUT);
   
   // Canvas
   pinMode(CANVAS_SIGNAL_PIN, INPUT);
   attachInterrupt(digitalPinToInterrupt(CANVAS_SIGNAL_PIN), canvas_signalInterrupt, CHANGE);
-  // Here I will later initialize pins for controlling fan speed, if required.
-
+  // Here one could initialize pins for controlling fan speed, if required.
+ 
   // Laser
-  for (int i = 0; i < DISPLAY_NR_LAYERS; i++) {
-    LASER_TRANSISTOR_PINS[i] = LASER_BASE_TRANSISTOR_PINS[i];
-  }
-  for (int i = 0; i < LASER_NR_PINS; i++) {
-    pinMode(LASER_PINS[i], OUTPUT);
-    laser_states[i] = LOW;
-  }
-  for (int i = 0; i < LASER_NR_TRANSISTOR_PINS; i++) {
-    pinMode(LASER_TRANSISTOR_PINS[i], OUTPUT);
-    digitalWrite(LASER_TRANSISTOR_PINS[i], HIGH);
-  }
+    // i/o expander register setup
+  write_reg(IODIRA, 0x00, CS1);
+  write_reg(IODIRB, 0x00, CS1);
+  write_reg(IODIRA, 0x00, CS2);
+  write_reg(IODIRB, 0x00, CS2);
+  write_reg(IODIRA, 0x00, CS3);
+  write_reg(IODIRB, 0x00, CS3);
+
+  init_layers();
 }
+
 
 long lastDebugTime = micros();
 
@@ -229,12 +262,13 @@ void loop() {
     case S_ACTIVE:
       display_frameTime = now - frameStartTime;
       display_layerTime = now - display_layerStartTime;
+      // Replace currentLayer functionality - instead loop over layers and check timings for each, SPIing as necessary
       if (display_layerTime > DISPLAY_MAX_LAYER_TIME) {
         currentLayer = (currentLayer + 1) % DISPLAY_NR_LAYERS;
         laser_showLayer(currentLayer);
         display_layerStartTime = now;
       }
-      // Loop over all layers and do the following. Probably need a prevCol array?
+      // TODO: Loop over all layers and do the following. Probably need a prevCol array?
       float canvas_angularFrequency = canvas_rps * twoPi; // Angular frequency of the canvas
       currentCol = canvas_getCurrentCol(display_frameTime, canvas_angularFrequency, currentLayer);
 
@@ -284,6 +318,8 @@ void loop() {
         debugLed(0);
         canvas_rps = canvas_getRps();
         display_loadDefaultFrame(frame, frameNr);
+        // TODO: Prepare next frame
+        // TODO: Calculate column timings for next frame
         //display_processComs(); // Read incoming serial coms and react accordingly
       }
       break;
