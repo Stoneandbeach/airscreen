@@ -15,28 +15,18 @@ void debugPrint() {
 void debugPrintTiming(int currentCol) {
   Serial.print(currentCol);
   Serial.print(",");
-  Serial.print(currentLayer);
-  Serial.print(",");
   Serial.print(canvas_signalState);
   Serial.print(",");
-  Serial.println(displayState);
+  Serial.print(displayState);
+  Serial.print(",");
+  Serial.println(canvas_rps);
 }
 
 long debugTimeNow = 0;
 long debugTimeThen = 0;
 
-void debugLasers() {
-  debugTimeNow = micros() - canvas_highTimes[canvas_signalHighCount % canvas_averageRpsOverCounts];
-  Serial.println(debugTimeNow);
-  int layer = 0;
-  float canvas_angularFrequency = canvas_rps * twoPi;
-  int col = canvas_getCurrentCol(debugTimeNow, canvas_angularFrequency, layer);
-  int debugLaserState = col % 2;
-  laser_setState(0, debugLaserState);
-}
-
 void debugLed(int state) {
-  digitalWrite(ONBOARD_LED_PIN, state);
+  digitalWrite(HEARTBEAT_LED_PIN, state);
 }
 
 int debugScreenArray[] = {0, 0, 0}; // TODO: Make this a char array if that is possible

@@ -1,3 +1,12 @@
+void init_expanders() {
+  write_reg(IODIRA, 0x00, CS1);
+  write_reg(IODIRB, 0x00, CS1);
+  write_reg(IODIRA, 0x00, CS2);
+  write_reg(IODIRB, 0x00, CS2);
+  write_reg(IODIRA, 0x00, CS3);
+  write_reg(IODIRB, 0x00, CS3);
+}
+
 uint16_t write_reg(uint8_t addr, uint8_t msg, uint8_t cs_pin) {
   return expander_com(addr, msg, 0, cs_pin);
 }

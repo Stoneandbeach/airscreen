@@ -15,6 +15,8 @@
 // Initialize high speed I2C for OLED screen
 //U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);
 
+#define DEBUG_RPS 1
+
 #define IODIRA 0x00  //direction register for PORTA
 #define IODIRB 0x01 //direction register for PORTB
 
@@ -78,7 +80,7 @@ displayCommand_t displayCommand = NO_COMMAND;
 display_error_t display_error = DISPLAY_NO_ERROR;
 const int HEARTBEAT_LED_PIN = 3;
 const int DISPLAY_NR_COLS = 4; // Number of columns in the display
-const int DISPLAY_NR_LAYERS = 2;
+const int DISPLAY_NR_LAYERS = 5;
 const float DISPLAY_RADIUS = 75; // Radius of the swept volume in mm
 const float DISPLAY_MAX_ANGLE = M_PI / 4; // Outer angle limit of innermost display layer
 float DISPLAY_ANGLE_LIMIT[DISPLAY_NR_LAYERS]; // Outer angle limit of the display layers, from axis tangential to laser beams
@@ -108,14 +110,24 @@ volatile int canvas_signalLowCount = 0;
 int canvas_prevSignalCount = 0;
 int canvas_prevRpsSignalCount = 0;
 
+#ifdef DEBUG_RPS
+const int canvas_averageRpsOverCounts = 2;
+#else
 const int canvas_averageRpsOverCounts = 10;
+#endif
 volatile long canvas_highTimes[canvas_averageRpsOverCounts];
 volatile long canvas_lowTimes[canvas_averageRpsOverCounts];
 
 const int CANVAS_SIGNAL_PIN = 2;
 
 float steadyRpsChangeLimit = 0.05; // Percentage change limit to consider rps steady
+#ifdef DEBUG_RPS
+float lowRpsLimit = 0.01;
+int steadyRpsCountTarget = 2;
+#else
+float lowRpsLimit = 1;
 int steadyRpsCountTarget = 10;
+#endif
 int steadyRpsCount = 0;
 
 volatile int canvas_signalState;
@@ -129,15 +141,8 @@ const float D = Dhalf * 2;
 const int n = DISPLAY_NR_COLS + 1; //+ Number of display columns, plus one last, dark, padded columns
 const float colWidth = D / n; // The width of a column in the display volume
 int8_t currentCol = 0; // The currently active column
-int currentLayer = 0; // The currently active layer
 
 // Laser variables
-const int LASER_NR_PINS = 6;
-const int LASER_PINS[LASER_NR_PINS] = {3, 4, 5, 6, 7, 8};
-int laser_states[LASER_NR_PINS];
-const int LASER_NR_TRANSISTOR_PINS = DISPLAY_NR_LAYERS;
-const int LASER_BASE_TRANSISTOR_PINS[5] = {17, 18, 19, 20, 21};
-int LASER_TRANSISTOR_PINS[LASER_NR_TRANSISTOR_PINS];
 layer_t layers[DISPLAY_NR_LAYERS];
 
 // Display functions
@@ -187,19 +192,15 @@ void setup() {
   pinMode(HEARTBEAT_LED_PIN, OUTPUT);
   
   // Canvas
+#ifndef DEBUG_RPS
   pinMode(CANVAS_SIGNAL_PIN, INPUT);
   attachInterrupt(digitalPinToInterrupt(CANVAS_SIGNAL_PIN), canvas_signalInterrupt, CHANGE);
+#endif
   // Here one could initialize pins for controlling fan speed, if required.
  
   // Laser
     // i/o expander register setup
-  write_reg(IODIRA, 0x00, CS1);
-  write_reg(IODIRB, 0x00, CS1);
-  write_reg(IODIRA, 0x00, CS2);
-  write_reg(IODIRB, 0x00, CS2);
-  write_reg(IODIRA, 0x00, CS3);
-  write_reg(IODIRB, 0x00, CS3);
-
+  init_expanders();
   init_layers();
 }
 
@@ -216,6 +217,10 @@ void loop() {
   if (now - lastDebugTime > 1000000) {
     //debugPrint();
     lastDebugTime = now;
+#ifdef DEBUG_RPS
+    canvas_signalState = 1 - canvas_signalState;
+    canvas_signalInterrupt();
+#endif
   }
   
   // Main state machine
@@ -230,11 +235,14 @@ void loop() {
       break;
     
     case S_SPINUP:
+      Serial.print(canvas_signalCount);
+      Serial.print(",");
+      Serial.println(steadyRpsCount);
        if (canvas_signalCount > 2 * canvas_averageRpsOverCounts) {
          float prevRps = canvas_rps;
          canvas_rps = canvas_getRps();
          float deltaRpsChange = (fabs(canvas_rps - prevRps) - deltaRps) / deltaRps;
-         if ((canvas_rps > 1) & (deltaRpsChange < steadyRpsChangeLimit)) {
+         if ((canvas_rps > lowRpsLimit) & (deltaRpsChange < steadyRpsChangeLimit)) {
             if (canvas_signalCount > canvas_prevSignalCount) {
               steadyRpsCount++;
               canvas_prevSignalCount = canvas_signalCount;
@@ -245,7 +253,7 @@ void loop() {
             }
          }
          deltaRps = canvas_rps - prevRps;
-       }
+       } 
        break;
     
     case S_READY:
@@ -261,29 +269,23 @@ void loop() {
     
     case S_ACTIVE:
       display_frameTime = now - frameStartTime;
-      display_layerTime = now - display_layerStartTime;
-      // Replace currentLayer functionality - instead loop over layers and check timings for each, SPIing as necessary
-      if (display_layerTime > DISPLAY_MAX_LAYER_TIME) {
-        currentLayer = (currentLayer + 1) % DISPLAY_NR_LAYERS;
-        laser_showLayer(currentLayer);
-        display_layerStartTime = now;
-      }
-      // TODO: Loop over all layers and do the following. Probably need a prevCol array?
       float canvas_angularFrequency = canvas_rps * twoPi; // Angular frequency of the canvas
-      currentCol = canvas_getCurrentCol(display_frameTime, canvas_angularFrequency, currentLayer);
+      // Replace currentLayer functionality - instead loop over layers and check timings for each, SPIing as necessary
+      for (int layer_nr = 0; layer_nr < DISPLAY_NR_LAYERS; layer_nr++) {
+        currentCol = canvas_getCurrentCol(display_frameTime, canvas_angularFrequency, layer_nr);
+        if (currentCol == -1) {
+          prevCol[layer_nr] = -1; // Layer is in a padded column, either before the first or after the last display column
+        }
+        if (currentCol > prevCol[layer_nr]) {
+          laser_showCol(currentCol, layer_nr);
+          prevCol[layer_nr] = currentCol;
+        }
+      }
 
       //Serial.print(currentLayer);
       //Serial.print(", ");
       //Serial.println(currentCol);
 
-      if (currentCol == -1) {
-        prevCol[currentLayer] = -1;
-      }
-      if (currentCol > prevCol[currentLayer]) {
-        laser_showCol(currentCol, currentLayer);
-        prevCol[currentLayer] = currentCol;
-      }
-      
       // Check if the innermost layer is in a padded column. If so, this display period ends.
       if (prevCol[DISPLAY_NR_LAYERS - 1] == -1) {
         setCommand(GO_DARK);
@@ -330,7 +332,6 @@ void loop() {
         setCommand(NO_COMMAND);
         frameStartTime = now; // TODO: Change this so that frameStartTime = the latest canvas_highTime, since that gives the best reference for how long I've got before the active state should end.
         display_layerStartTime = now;
-        currentLayer = 0;
         for (int layer = 0; layer < DISPLAY_NR_LAYERS; layer++) {
           prevCol[layer] = 0;
         }

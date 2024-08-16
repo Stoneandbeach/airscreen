@@ -1,8 +1,9 @@
 uint8_t columnIdx = 0;
+uint8_t default_frame_nr = 0;
 
 void display_loadFrame(uint8_t *frameArray, int nr) {
   if (nr == -1) {
-    display_loadDefaultFrame(frameArray, nr);
+    display_loadDefaultFrame(frameArray, default_frame_nr++);
   } else {
     //long darkTime = canvas_highTimes[canvas_signalHighCount % canvas_averageRpsOverCounts] - canvas_lowTimes[canvas_signalLowCount % canvas_averageRpsOverCounts];
     float spr = 1 / canvas_rps;
@@ -38,39 +39,10 @@ void display_loadFrame(uint8_t *frameArray, int nr) {
   Serial.write(columnIdx);
 }
 
-void display_loadDefaultFrame(uint8_t *frameArray, int nr) {
-  uint8_t columns[11];
-  //if ((nr / 10) % 2 == 0) {
-  if (false) {
-    uint8_t temp[11] = {0b00010101,
-                        0b00010101,
-                        0b00010101,
-                        0b00010101,
-                        0b00010101,
-                        0b00010101,
-                        0b00010101,
-                        0b00010101,
-                        0b00010101,
-                        0b00010101,
-                        0b00010101};
-    for (int i = 0; i < 11; i++) {
-      columns[i] = temp[i];
-    }
-  } else {
-    uint8_t temp[11] = {0b00111111,
-                        0b00111111,
-                        0b00111111,
-                        0b00111111,
-                        0b00111111,
-                        0b00000000,
-                        0b00000000,
-                        0b00000000,
-                        0b00000000,
-                        0b00000000,
-                        0b00000000};
-    for (int i = 0; i < DISPLAY_NR_COLS; i++) {
-      columns[i] = temp[i];
-    }
+void display_loadDefaultFrame(uint8_t *frameArray, uint8_t nr) {
+  uint8_t columns[DISPLAY_NR_COLS];
+  for (int i = 0; i < DISPLAY_NR_COLS; i++) {
+    columns[i] = 1 << (nr % 6); // TODO: Adapt this to know how many lasers there are instead of hardcoding it.
   }
   for (int i = 0; i < DISPLAY_NR_COLS; i++) {
     frameArray[i] = columns[i];
@@ -114,7 +86,9 @@ void display_setError(int error) {
 // Interrupts
 void canvas_signalInterrupt() {
   canvas_signalCount++;
+#ifndef DEBUG_RPS
   canvas_signalState = digitalRead(CANVAS_SIGNAL_PIN);
+#endif
   if (canvas_signalState) {
     canvas_signalHighCount++;
     canvas_highTimes[canvas_signalHighCount % canvas_averageRpsOverCounts] = micros();
