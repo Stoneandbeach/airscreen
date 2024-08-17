@@ -15,7 +15,7 @@
 // Initialize high speed I2C for OLED screen
 //U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);
 
-#define DEBUG_RPS 1
+//#define DEBUG_RPS 1
 
 #define IODIRA 0x00  //direction register for PORTA
 #define IODIRB 0x01 //direction register for PORTB
@@ -78,7 +78,7 @@ typedef struct layer {
 displayState_t displayState = S_INIT;
 displayCommand_t displayCommand = NO_COMMAND;
 display_error_t display_error = DISPLAY_NO_ERROR;
-const int HEARTBEAT_LED_PIN = 3;
+const int HEARTBEAT_LED_PIN = 2;
 const int DISPLAY_NR_COLS = 4; // Number of columns in the display
 const int DISPLAY_NR_LAYERS = 5;
 const float DISPLAY_RADIUS = 75; // Radius of the swept volume in mm
@@ -118,7 +118,7 @@ const int canvas_averageRpsOverCounts = 10;
 volatile long canvas_highTimes[canvas_averageRpsOverCounts];
 volatile long canvas_lowTimes[canvas_averageRpsOverCounts];
 
-const int CANVAS_SIGNAL_PIN = 2;
+const int CANVAS_SIGNAL_PIN = 3;
 
 float steadyRpsChangeLimit = 0.05; // Percentage change limit to consider rps steady
 #ifdef DEBUG_RPS
